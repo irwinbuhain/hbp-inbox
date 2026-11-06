@@ -23,6 +23,8 @@ const css=`
 .oreset{flex:none;background:none;border:0;color:#0a84ff;font-size:14px;padding:6px 0;cursor:pointer}
 .ohint{font-size:12px;color:#8e8e93;margin-top:-4px}
 .ohint.warn{color:#ff9f0a}
+.opvl{font-size:12px;color:#8e8e93;margin-top:2px}
+.opv{background:#0b3d2a;color:#e5e5ea;border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.35;white-space:pre-wrap}
 .uwk{flex:none;background:#1c1c1e;border-radius:12px;padding:8px 12px;min-width:86px}
 .uwk span{display:block;font-size:11px;color:#8e8e93;text-transform:uppercase;letter-spacing:.4px}
 .uwk b{font-size:17px;font-variant-numeric:tabular-nums}
@@ -351,25 +353,28 @@ function dock(rec){
   const reset=E("button",{type:"button",class:"oreset",hidden:"",onclick:()=>{openEdited=false;syncOpen();oi.focus();}},"Use MIN");
   oi.addEventListener("input",()=>{const n=oi.value.replace(/[^0-9]/g,"");oi.value=n?Number(n).toLocaleString("en-US"):"";openEdited=true;reset.hidden=false;window.__uwOpenHint&&window.__uwOpenHint();});
   const hint=E("div",{class:"ohint",id:"uwOpenHint"});
-  window.__uwOpenHint=()=>{const v=openVal(),mn=(U.offer||{}).min,mx=(U.offer||{}).max;hint.className="ohint";
+  window.__uwOpenHint=()=>{const v=openVal(),mn=(U.offer||{}).min,mx=(U.offer||{}).max;hint.className="ohint";const pvx=window.__uwPv;if(pvx&&U.offerTemplate)pvx.textContent=v?String(U.offerTemplate).split("{AMOUNT}").join($$(v)):"No offer will be sent";
     if(!v){hint.textContent=(typeof mn==="number"&&mn<=0)?"MIN is below zero – type an offer, or approve with no offer":"No offer will be drafted";hint.classList.add("warn");}
     else if(typeof mx==="number"&&v>mx){hint.textContent=`Above MAX (${$$(mx)})`;hint.classList.add("warn");}
-    else if(typeof mn==="number"&&v===mn&&!openEdited){hint.textContent="MIN offer – the bot drafts the text, you approve it before it sends";}
-    else{hint.textContent="Your number – the bot drafts the text, you approve it before it sends";}};
+    else if(typeof mn==="number"&&v===mn&&!openEdited){hint.textContent=(U.offerTemplate&&U.contact)?"MIN offer – approving texts it right away":"MIN offer – the bot drafts the text, you approve it before it sends";}
+    else{hint.textContent=(U.offerTemplate&&U.contact)?"Your number – approving texts it right away":"Your number – the bot drafts the text, you approve it before it sends";}};
   window.__uwSyncOpen=syncOpen;
   function syncOpen(){if(openEdited)return;const mn=(U.offer||{}).min;oi.value=(typeof mn==="number"&&mn>0)?Math.round(mn).toLocaleString("en-US"):"";reset.hidden=true;window.__uwOpenHint();}
   openEdited=false;
   d.append(E("div",{class:"orow"},E("label",{for:"uwOpen",text:"Opening offer"}),E("div",{class:"ofield"},E("span",{text:"$"}),oi),reset),hint);
+  const canText=!!(U.offerTemplate&&U.contact&&U.contact.contactId);
+  const pv=E("div",{class:"opv"});window.__uwPv=canText?pv:null;
+  if(canText)d.append(E("div",{class:"opvl",text:`Text to ${U.contact.name||U.contact.firstName||"the realtor"} – sends the moment you approve`}),pv);
   syncOpen();
   let armed=false;const ab=E("button",{class:"act approve",type:"button",style:"flex:1",onclick:async()=>{
     if(!api.isOwner()){api.toast("Only Irwin approves underwriting");return;}
     const v=openVal();
-    if(!armed){armed=true;ab.textContent=v?`Tap to confirm · open at ${$$(v)}`:"Tap to confirm · no offer";ab.classList.add("confirm");setTimeout(()=>{armed=false;ab.textContent="Approve underwriting";ab.classList.remove("confirm");},4000);return;}
+    if(!armed){armed=true;const tx=!!(U.offerTemplate&&U.contact&&U.contact.contactId);ab.textContent=v?(tx?`Tap to confirm · text ${$$(v)} now`:`Tap to confirm · open at ${$$(v)}`):"Tap to confirm · no offer";ab.classList.add("confirm");setTimeout(()=>{armed=false;ab.textContent=(U.offerTemplate&&U.contact)?"Approve & send offer":"Approve underwriting";ab.classList.remove("confirm");},4000);return;}
     const mn=(U.offer||{}).min;
     const note=v?`OPENING_OFFER: ${v}\nOpening offer ${$$(v)}${(typeof mn==="number"&&v!==Math.round(mn))?` (edited by Irwin – MIN was ${$$(mn)})`:" (MIN)"}`:"OPENING_OFFER: none\nApproved with no opening offer";
     rec.openingOffer=v||0;
     await decide(rec,"Approve",note);}},"Approve underwriting");
-  if(!api.isOwner()){ab.disabled=true;ab.textContent="Irwin approves underwriting";oi.disabled=true;}
+  if(U.offerTemplate&&U.contact)ab.textContent="Approve & send offer";if(!api.isOwner()){ab.disabled=true;ab.textContent="Irwin approves underwriting";oi.disabled=true;}
   d.append(E("div",{class:"acts"},ab));
   const ta=E("textarea",{rows:"1",placeholder:"Change underwriting…","aria-label":"Change underwriting"});
   const send=E("button",{class:"send",type:"button","aria-label":"Send change",disabled:""});
@@ -384,7 +389,7 @@ async function decide(rec,decision,note){
   rec.status=decision==="Approve"?"Approved":"Change requested";rec.decidedBy=api.me();rec.decidedAt="now";
   api.haptic("ok");api.toast(decision==="Approve"?"Underwriting approved":"Sent to the bot");render(rec);
   api.patch&&api.patch("uw",rec.id,{status:rec.status,decidedBy:rec.decidedBy});
-  try{const r=await api.run("decideUnderwriting",rec.id,decision,note);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");api.refresh&&api.refresh();}
+  try{const r=await api.run("decideUnderwriting",rec.id,decision,note);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");if(r.offer){if(r.offer.sent){api.toast("Offer texted ✓");rec.status="Sent";api.patch&&api.patch("uw",rec.id,{status:"Sent"});render(rec);}else api.toast("Approved – offer not sent yet, check the inbox");}api.refresh&&api.refresh();}
   catch(e){rec.status=prev;api.haptic("err");api.toast("Couldn't save – try again");render(rec);api.patch&&api.patch("uw",rec.id,{status:prev});}
 }
 let opening=false;
