@@ -37,8 +37,8 @@ function title(r){return r.lead||r.property||r.bot||r.id;}
 function parse(values){const out=[];(values||[]).slice(1).forEach((row,i)=>{const r={};COLS.forEach((c,j)=>r[c]=row[j]==null?"":String(row[j]));r.rowNum=i+2;if(r.id)out.push(r);});return out;}
 async function load(manual){
   if(!S.ready||S.pending>0)return;
-  try{const d=await run("getData",INIT);if(S.pending>0)return;S.me=d.me;S.isOwner=d.isIrwin;S.rows=parse(d.values);S.uw=d.uw||[];S.lastLoad=nowT();S.error=null;
-    try{localStorage.setItem("hbp-cache",JSON.stringify({me:S.me,isOwner:S.isOwner,values:d.values,uw:S.uw}));}catch(e){}}
+  try{const d=await run("getData",INIT);if(S.pending>0)return;S.me=d.me;S.isOwner=d.isIrwin;S.rows=parse(d.values);S.uw=d.uw||[];S.reports=d.reports||[];S.lastLoad=nowT();S.error=null;
+    try{localStorage.setItem("hbp-cache",JSON.stringify({me:S.me,isOwner:S.isOwner,values:d.values,uw:S.uw,reports:S.reports}));}catch(e){}}
   catch(e){S.error=e;}
   if(S.view==="thread"&&S.cur&&!S.rows.find(r=>r.id===S.cur)){closeThread();return;}
   renderList();
@@ -53,7 +53,29 @@ function render(){ syncBack(); renderList(); if(S.view==="thread"&&S.cur)renderT
 function syncBack(){try{if(TG&&TG.BackButton){if(S.view==="thread"&&S.cur)TG.BackButton.show();else TG.BackButton.hide();}}catch(e){}}
 
 function errorBox(e){const m=String((e&&e.message)||e||"");const t=/NOT_ALLOWED/.test(m)?["Not allowed","This inbox is only for Irwin and Dandy."]:/NOT_TELEGRAM|BAD_SIGNATURE|EXPIRED/.test(m)?["Open this from Telegram","Use the Open inbox button on a bot alert in Telegram."]:["Couldn't reach the inbox","Tap Refresh to try again."];return el("div",{class:"banner"},el("b",{text:t[0]}),t[1],el("div",{style:"opacity:.6;font-size:12px;margin-top:6px",text:"Code: "+m.replace(/^Error:\s*/,"").slice(0,160)}));}
+function modeSeg(){
+  let ms=$("modeSeg");if(!ms){ms=el("div",{class:"seg",id:"modeSeg",style:"margin-bottom:8px"});$("whoSeg").before(ms);}
+  const openSug=(S.reports||[]).reduce((n,r)=>n+(Number(r.open)||0),0);
+  ms.replaceChildren(...[["tasks","Tasks"],["reports",`Reports${openSug?" · "+openSug:""}`]].map(([k,l])=>el("button",{type:"button","aria-pressed":String((S.mode||"tasks")===k),onclick:()=>{S.mode=k;haptic();render();}},l)));
+}
+function renderReports(){
+  $("whoSeg").hidden=true;$("botChips").hidden=true;
+  const list=$("list");list.replaceChildren();
+  const R=S.reports||[];
+  if(!R.length){list.append(el("div",{class:"empty"},el("strong",{text:"No reports yet"}),"End-of-day and morning reports from each bot will show up here."));return;}
+  const today=nowT().slice(0,10);const groups={};R.forEach(r=>{const d=(r.date||r.created||"").slice(0,10);(groups[d]=groups[d]||[]).push(r);});
+  Object.keys(groups).sort().reverse().forEach(d=>{list.append(el("div",{class:"sect",text:d===today?"Today":d}));
+    groups[d].forEach(r=>list.append(el("button",{class:"row",type:"button",onclick:()=>window.__rp&&window.__rp.open(r.id)},
+      el("span",{class:"dot"},Number(r.open)>0?el("i"):null),
+      el("span",{class:"av",text:String(r.bot||"?").replace(/[^A-Za-z ]/g,"").split(/\s+/).map(w=>w[0]||"").join("").slice(0,2).toUpperCase()}),
+      el("span",{class:"rtext"},el("span",{class:"rline"},el("span",{class:"rname",text:`${r.bot} – ${r.title}`}),el("span",{class:"rtime",text:shortTime(r.created)})),
+        el("span",{class:"rprev",text:(r.kpis||[]).map(k=>`${k.label} ${k.value}${k.unit&&k.unit!=="$"?k.unit:""}`).join(" · ")}),
+        Number(r.open)>0?el("span",{class:"rtag"},el("b",{text:`${r.open} suggestion${r.open>1?"s":""} to review`})):null))));});
+}
 function renderList(){
+  modeSeg();
+  if(S.mode==="reports"){renderReports();return;}
+  $("whoSeg").hidden=false;
   const w=S.who||(S.isOwner?"irwin":"dandy");
   $("sub").textContent=S.lastLoad?`${S.me} · updated ${longTime(S.lastLoad)}`:S.me;
   const seg=$("whoSeg");seg.replaceChildren();
@@ -136,7 +158,7 @@ function notesCard(t){
 }
 function streetKey(s){return String(s||"").toLowerCase().split(",")[0].replace(/\b(street|st|avenue|ave|road|rd|drive|dr|boulevard|blvd|court|ct|lane|ln|place|pl)\b\.?/g,"").replace(/[^a-z0-9]/g,"");}
 function uwFor(r){const L=S.uw||[];return L.find(u=>(u.inboxIds||[]).indexOf(r.id)>=0)||(r.property?L.find(u=>streetKey(u.address)&&streetKey(u.address)===streetKey(r.property)):null)||null;}
-function onBack(){if(window.__uw&&window.__uw.isOpen()){window.__uw.close();return;}closeThread();}
+function onBack(){if(window.__rp&&window.__rp.isOpen()){window.__rp.close();return;}if(window.__uw&&window.__uw.isOpen()){window.__uw.close();return;}closeThread();}
 function renderThread(){
   const r=S.rows.find(x=>x.id===S.cur);if(!r){closeThread();return;}S.curSig=JSON.stringify(r);
   const q=navQueue();const i=q.findIndex(x=>x.id===r.id);
@@ -263,10 +285,11 @@ async function decide(r,decision,note){
   if(!START){try{START=new URLSearchParams(location.search).get("task")||"";}catch(e){}}
   window.__uwApi={run:(fn,...x)=>run(fn,INIT,...x),isOwner:()=>S.isOwner,me:()=>S.me,toast,haptic,backOn:()=>{try{TG.BackButton.show();}catch(e){}},backOff:()=>syncBack()};
   window.__uwHaptic=()=>haptic();
-  {const u=document.createElement("script");u.src="uw.js?v="+Date.now();document.body.appendChild(u);}
+  {const u=document.createElement("script");u.src="uw.js?v="+Date.now();document.body.appendChild(u);const r=document.createElement("script");r.src="rpt.js?v="+Date.now();document.body.appendChild(r);}
   S.ready=true;
   if(!INIT){$("sub").textContent="";$("list").replaceChildren(errorBox(new Error("NOT_TELEGRAM")));return;}
-  try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c&&c.values){S.me=c.me;S.isOwner=c.isOwner;S.rows=parse(c.values);S.uw=c.uw||[];renderList();}}catch(e){}
+  try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c&&c.values){S.me=c.me;S.isOwner=c.isOwner;S.rows=parse(c.values);S.uw=c.uw||[];S.reports=c.reports||[];renderList();}}catch(e){}
+  if(/^RPT-/.test(START)){S.mode="reports";const t=setInterval(()=>{if(window.__rp){clearInterval(t);window.__rp.open(START);}},100);}
   if(/^UW-/.test(START)){const t=setInterval(()=>{if(window.__uw){clearInterval(t);window.__uw.open(START);}},100);}
   if(START&&S.rows.find(r=>r.id===START))openThread(START);
   await load(false);
