@@ -67,6 +67,8 @@ const css=`
 .uwbtn span{color:#8e8e93;font-weight:500;font-size:13px}
 .uwpin{background:#0a84ff;color:#fff;border:2px solid #fff;border-radius:50%;width:24px!important;height:24px!important;display:grid!important;place-items:center;font:700 12px system-ui;box-shadow:0 2px 6px rgba(0,0,0,.5)}
 .uwpin.s{background:#e3b341;color:#1a1407;width:30px!important;height:30px!important;font-size:14px}
+.hoodtip{background:#1c1c1e!important;color:#fff!important;border:0!important;font:600 12px system-ui!important;box-shadow:0 2px 8px rgba(0,0,0,.6)!important}
+.hoodtip:before{display:none}
 .leaflet-container{background:#111!important}
 .leaflet-control-attribution{background:rgba(0,0,0,.6)!important;color:#8e8e93!important;font-size:9px!important}
 .leaflet-control-attribution a{color:#8e8e93!important}
@@ -108,7 +110,7 @@ function closeSheet(){if(!sheet)return;const s=sheet;sheet=null;s.classList.remo
 function compSheet(c){
   openSheet(`Comp ${c.n} · ${c.address}`,[
     carousel(c.photos,c.address),
-    kv([["Sold",`${$$(c.soldPrice)}${c.soldDate?" · "+c.soldDate:""}`],["$ / sq ft",c.ppsf?"$"+Math.round(c.ppsf):"–"],["Beds / baths",`${c.beds??"–"} / ${c.baths??"–"}`],["Sq ft",c.sqft?Number(c.sqft).toLocaleString():"–"],["Year built",c.yearBuilt||"–"],["Siding",c.siding||"–"],["Distance",c.distanceMi!=null?`${c.distanceMi} mi`:"–"]]),
+    kv([["Sold",`${$$(c.soldPrice)}${c.soldDate?" · "+c.soldDate:""}`],["$ / sq ft",c.ppsf?"$"+Math.round(c.ppsf):"–"],["Beds / baths",`${c.beds??"–"} / ${c.baths??"–"}`],["Sq ft",c.sqft?Number(c.sqft).toLocaleString():"–"],["Year built",c.yearBuilt||"–"],["Siding",c.siding||"–"],["Distance",c.distanceMi!=null?`${c.distanceMi} mi`:"–"],["Neighborhood",c._hood||"–"]]),
     ptxt("Condition",c.condition),ptxt("Why it counts",c.why),
     (c.flags&&c.flags.length)?E("div",{},...c.flags.map(f=>E("span",{class:"flag",text:f}))):null,
     c.url?E("a",{class:"uwbtn",href:c.url,target:"_blank",rel:"noopener"},"Open listing",E("span",{text:"↗"})):null
@@ -128,7 +130,7 @@ function paneComps(){
   (U.comps||[]).forEach(c=>p.append(E("button",{class:"ccard",type:"button",onclick:()=>compSheet(c)},
     img((c.photos||[])[0],"",c.address),
     E("div",{class:"ci"},E("div",{class:"p"},E("span",{class:"n",text:String(c.n)}),$$(c.soldPrice)),E("div",{class:"a",text:c.address}),
-      E("div",{class:"m",text:[`${c.beds??"–"}bd/${c.baths??"–"}ba`,c.sqft?Number(c.sqft).toLocaleString()+" sf":"",c.ppsf?"$"+Math.round(c.ppsf)+"/sf":"",c.distanceMi!=null?c.distanceMi+" mi":"",c.soldDate||""].filter(Boolean).join(" · ")}),
+      E("div",{class:"m",text:[`${c.beds??"–"}bd/${c.baths??"–"}ba`,c.sqft?Number(c.sqft).toLocaleString()+" sf":"",c.ppsf?"$"+Math.round(c.ppsf)+"/sf":"",c.distanceMi!=null?c.distanceMi+" mi":"",c.soldDate||""].filter(Boolean).join(" · ")}),c._hood?E("div",{class:"m",text:"Area "+c._hood}):null,
       ...(c.flags||[]).map(f=>E("span",{class:"flag",text:f}))))));
   if(U.rejected&&U.rejected.length){p.append(E("div",{class:"grp"},E("span",{text:`Not used · ${U.rejected.length}`})));U.rejected.forEach(r=>p.append(E("div",{class:"skip"},E("b",{text:r.address}),` – ${r.reason}`)));}
   return p;
@@ -158,6 +160,7 @@ async function drawMap(){
   map=L.map("uwMap",{zoomControl:false,attributionControl:true,tap:true});
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,attribution:"Esri, HERE, OpenStreetMap"}).addTo(map);
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:16}).addTo(map);
+  drawHoods();
   const pts=[];
   if(s.lat&&s.lng){pts.push([s.lat,s.lng]);L.marker([s.lat,s.lng],{icon:L.divIcon({className:"uwpin s",html:"★",iconSize:[30,30]}),zIndexOffset:1000}).addTo(map).on("click",subjectSheet);}
   (U.comps||[]).forEach(c=>{if(c.lat&&c.lng){pts.push([c.lat,c.lng]);L.marker([c.lat,c.lng],{icon:L.divIcon({className:"uwpin",html:String(c.n),iconSize:[24,24]})}).addTo(map).on("click",()=>compSheet(c));}});
@@ -165,6 +168,22 @@ async function drawMap(){
   setTimeout(()=>map&&map.invalidateSize(),450);
 }
 
+let hoods=null,hoodLayer=null;
+const inRing=(pt,ring)=>{let c=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const[yi,xi]=ring[i],[yj,xj]=ring[j];if(((yi>pt[0])!=(yj>pt[0]))&&(pt[1]<(xj-xi)*(pt[0]-yi)/(yj-yi)+xi))c=!c;}return c;};
+function hoodAt(lat,lng){if(!hoods||!lat)return null;return hoods.find(h=>h.r.some(r=>inRing([lat,lng],r)))||null;}
+async function drawHoods(){
+  try{
+    if(!hoods){try{const c=JSON.parse(localStorage.getItem("hbp-hoods")||"null");if(c&&Date.now()-c.t<6*3600e3)hoods=c.d;}catch(e){}}
+    if(!hoods){hoods=await window.__uwApi.run("getNeighborhoods");try{localStorage.setItem("hbp-hoods",JSON.stringify({t:Date.now(),d:hoods}));}catch(e){}}
+    if(!map||!hoods)return;
+    hoodLayer=L.layerGroup().addTo(map);
+    hoods.forEach(h=>{const pg=L.polygon(h.r,{color:h.c,weight:1,opacity:.8,fillColor:h.c,fillOpacity:.22,interactive:true}).addTo(hoodLayer);pg.bindTooltip(`${h.g||"?"} · ${h.n}`,{sticky:true,className:"hoodtip"});pg.bringToBack();});
+    const s=U.subject||{},h=hoodAt(s.lat,s.lng);const gk=$("uwGrade");
+    if(gk&&h){gk.querySelector("b").textContent=h.g||"–";gk.title=h.n;gk.style.borderColor=h.c;}
+    (U.comps||[]).forEach(c=>{const ch=hoodAt(c.lat,c.lng);c._hood=ch?`${ch.g} · ${ch.n}`:"";});
+    if(tab==="comps")renderPane();
+  }catch(e){}
+}
 function render(rec){
   U=rec.data;const s=U.subject||{},st=rec.status||"Draft";
   const stCls=/approv/i.test(st)?"uwst ok":/change/i.test(st)?"uwst chg":"uwst";
@@ -172,7 +191,7 @@ function render(rec){
     E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:s.address||"Underwriting"}),E("span",{text:`Underwriting · ${U.bot||""}${U.confidence?" · "+U.confidence+" confidence":""}`})),E("span",{class:stCls,text:st})),
     E("div",{class:"uwbody"},
       E("div",{id:"uwMap"}),
-      E("div",{class:"uwsum"},E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("div",{class:"uwk"},E("span",{text:"MIN"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"},E("span",{text:"MAX"}),E("b",{text:k(U.offer&&U.offer.max)})),E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)}))),
+      E("div",{class:"uwsum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("div",{class:"uwk"},E("span",{text:"MIN"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"},E("span",{text:"MAX"}),E("b",{text:k(U.offer&&U.offer.max)})),E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)}))),
       E("div",{class:"uwtabs",id:"uwTabs"},E("div",{class:"seg"},...[["comps",`Comps (${(U.comps||[]).length})`],["repairs","Repairs"],["subject","Subject"]].map(([t,l])=>E("button",{type:"button","data-t":t,"aria-pressed":"false",onclick:()=>{tab=t;renderPane();window.__uwHaptic&&window.__uwHaptic();}},l)))),
       E("div",{id:"uwPane"})),
     dock(rec));
