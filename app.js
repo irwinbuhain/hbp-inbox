@@ -238,7 +238,7 @@ async function decide(r,decision,note){
     const res=await run("decide",INIT,r.id,decision,note||"",expect);
     S.pending--;
     if(!res.ok){haptic("err");S.rows=parse(res.values);toast(res.reason==="GONE"?"That task is gone":res.reason==="IRWIN_ONLY"?"Only Irwin can approve offers":"Not saved – that task changed, check it again");render();return;}
-    if(S.pending===0){S.rows=parse(res.values);renderList();}
+    if(S.pending===0){S.rows=parse(res.values);renderList();try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c){c.values=res.values;localStorage.setItem("hbp-cache",JSON.stringify(c));}}catch(e){}}
   }catch(e){S.pending--;Object.assign(r,before);haptic("err");toast("Couldn't save – try again");render();}
 }
 
@@ -303,7 +303,12 @@ async function decide(r,decision,note){
     INIT=TG.initData||"";START=(TG.initDataUnsafe&&TG.initDataUnsafe.start_param)||"";
   }
   if(!START){try{START=new URLSearchParams(location.search).get("task")||"";}catch(e){}}
-  window.__uwApi={run:(fn,...x)=>run(fn,INIT,...x),isOwner:()=>S.isOwner,me:()=>S.me,toast,haptic,backOn:()=>{try{TG.BackButton.show();}catch(e){}},backOff:()=>syncBack()};
+  window.__uwApi={run:(fn,...x)=>run(fn,INIT,...x),isOwner:()=>S.isOwner,me:()=>S.me,toast,haptic,
+    /* instant list updates after acting in the underwriting / report screens */
+    patch:(kind,id,fields)=>{const L=kind==="uw"?S.uw:S.reports;const it=(L||[]).find(x=>x.id===id||(x.inboxIds||[]).indexOf(id)>=0);if(it)Object.assign(it,fields);renderList();
+      try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c){c.uw=S.uw;c.reports=S.reports;localStorage.setItem("hbp-cache",JSON.stringify(c));}}catch(e){}},
+    refresh:()=>{setTimeout(()=>load(false),300);},
+backOn:()=>{try{TG.BackButton.show();}catch(e){}},backOff:()=>syncBack()};
   window.__uwHaptic=()=>haptic();
   {const u=document.createElement("script");u.src="uw.js?v="+Date.now();document.body.appendChild(u);const r=document.createElement("script");r.src="rpt.js?v="+Date.now();document.body.appendChild(r);}
   S.ready=true;

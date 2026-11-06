@@ -67,8 +67,10 @@ async function act(decision,text,note){
   const A=api();const prev=JSON.stringify(R.actions||[]);
   (R.actions=R.actions||[]).push({when:"now",kind:decision==="Instruction"?"Instruction":"Suggestion",text,note,by:A.me(),status:decision==="Skip"?"Declined":"New",result:""});
   A.haptic("ok");A.toast(decision==="Skip"?"Skipped":"Sent to Claude");render();
-  try{const r=await A.run("reportAction",R.id,decision,text,note||"");if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");}
-  catch(e){R.actions=JSON.parse(prev);A.haptic("err");A.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can do this":"Couldn't save – try again");render();}
+  const left=()=>{const d=(R.actions||[]).filter(a=>a.kind==="Suggestion").map(a=>a.text);return ((R.data&&R.data.suggestions)||[]).filter(x=>d.indexOf(x.text)<0).length;};
+  A.patch&&A.patch("rp",R.id,{open:left()});
+  try{const r=await A.run("reportAction",R.id,decision,text,note||"");if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");A.refresh&&A.refresh();}
+  catch(e){R.actions=JSON.parse(prev);A.haptic("err");A.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can do this":"Couldn't save – try again");render();A.patch&&A.patch("rp",R.id,{open:left()});}
 }
 /* cache: reports open instantly from memory/localStorage, then refresh in the background */
 const MEM={};

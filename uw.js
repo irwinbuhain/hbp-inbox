@@ -383,8 +383,9 @@ async function decide(rec,decision,note){
   const api=window.__uwApi;const prev=rec.status;
   rec.status=decision==="Approve"?"Approved":"Change requested";rec.decidedBy=api.me();rec.decidedAt="now";
   api.haptic("ok");api.toast(decision==="Approve"?"Underwriting approved":"Sent to the bot");render(rec);
-  try{const r=await api.run("decideUnderwriting",rec.id,decision,note);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");}
-  catch(e){rec.status=prev;api.haptic("err");api.toast("Couldn't save – try again");render(rec);}
+  api.patch&&api.patch("uw",rec.id,{status:rec.status,decidedBy:rec.decidedBy});
+  try{const r=await api.run("decideUnderwriting",rec.id,decision,note);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");api.refresh&&api.refresh();}
+  catch(e){rec.status=prev;api.haptic("err");api.toast("Couldn't save – try again");render(rec);api.patch&&api.patch("uw",rec.id,{status:prev});}
 }
 let opening=false;
 /* cache: underwritings open instantly from memory/localStorage, then refresh in the background */
