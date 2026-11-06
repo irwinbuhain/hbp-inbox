@@ -330,9 +330,9 @@ let curRec=null,openEdited=false;
 let openEl=null;function openVal(){const el=openEl||document.getElementById("uwOpen");const n=el?Number(el.value.replace(/[^0-9]/g,"")):0;return n>0?n:0;}
 function render(rec){curRec=rec;cput(rec);
   U=rec.data;const s=U.subject||{},st=rec.status||"Draft";
-  const stCls=/approv/i.test(st)?"uwst ok":/change/i.test(st)?"uwst chg":"uwst";
+  const stCls="uwst";const stCol=(window.__uwColor||(()=>"#e5e5ea"))(st);
   view.replaceChildren(
-    E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:s.address||"Underwriting"}),E("span",{text:[s.type,`${s.beds??"–"}bd/${s.baths??"–"}ba`,U.confidence?U.confidence+" confidence":""].filter(Boolean).join(" · ")})),E("span",{class:stCls,text:st})),
+    E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:s.address||"Underwriting"}),E("span",{text:[s.type,`${s.beds??"–"}bd/${s.baths??"–"}ba`,U.confidence?U.confidence+" confidence":""].filter(Boolean).join(" · ")})),E("span",{class:stCls,style:`color:${stCol};box-shadow:inset 0 0 0 1px ${stCol}55;background:${stCol}1f`,text:st})),
     E("div",{class:"uwbody"},
       E("div",{id:"uwMap"}),
       sumEl(),
@@ -344,8 +344,8 @@ function render(rec){curRec=rec;cput(rec);
 }
 function dock(rec){
   const d=E("div",{class:"uwdock"});const api=window.__uwApi;
-  if(/approv/i.test(rec.status||"")){const m=/OPENING_OFFER:\s*(\d+)/.exec(rec.note||"");const ov=rec.openingOffer||(m?Number(m[1]):0);
-    d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Approved by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(ov?` · opening offer ${$$(ov)} – drafting, you'll approve the text`:/OPENING_OFFER:\s*none/.test(rec.note||"")?" · no offer":"")}));return d;}
+  if((window.__uwPost||(x=>/approv/i.test(x)))(rec.status||"")){const m=/OPENING_OFFER:\s*(\d+)/.exec(rec.note||"");const ov=rec.openingOffer||(m?Number(m[1]):0);
+    d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Approved by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(ov?(/approv/i.test(rec.status||"")?` · opening offer ${$$(ov)} – drafting, you'll approve the text`:` · opening offer ${$$(ov)}`):/OPENING_OFFER:\s*none/.test(rec.note||"")?" · no offer":"")}));return d;}
   /* Opening offer: always starts at MIN (Irwin, Nov 6); editable before approving */
   const oi=E("input",{type:"text",inputmode:"numeric",autocomplete:"off","aria-label":"Opening offer",id:"uwOpen",size:"1"});openEl=oi;
   const reset=E("button",{type:"button",class:"oreset",hidden:"",onclick:()=>{openEdited=false;syncOpen();oi.focus();}},"Use MIN");

@@ -48,7 +48,7 @@ async function load(manual){
 
 /* warm the underwriting + report screens in the background so they open instantly */
 let pfT=0;function prefetchDetails(){clearTimeout(pfT);pfT=setTimeout(()=>{
-  const uw=(S.uw||[]).slice().sort((a,b)=>(/approv/i.test(a.status)-/approv/i.test(b.status))||String(b.created||"").localeCompare(String(a.created||""))).map(u=>u.id);
+  const uw=(S.uw||[]).slice().sort((a,b)=>(uwPost(a.status)-uwPost(b.status))||String(b.created||"").localeCompare(String(a.created||""))).map(u=>u.id);
   const rp=(S.reports||[]).map(r=>r.id);
   if(window.__uw&&window.__uw.prefetch)window.__uw.prefetch(uw).then(()=>window.__rp&&window.__rp.prefetch&&window.__rp.prefetch(rp));
   else if(window.__rp&&window.__rp.prefetch)window.__rp.prefetch(rp);
@@ -100,20 +100,25 @@ function renderList(){
   if(!open.length&&!fyi.length&&!dec.length&&!S.error&&!(S.uw||[]).length){list.append(el("div",{class:"empty"},el("strong",{text:"All caught up"}),"When a bot needs you, it shows up here like a new message."));return;}
   const section=(label,rows,unread)=>{if(!rows.length)return;list.append(el("div",{class:"sect",text:label}));rows.forEach(r=>list.append(rowEl(r,unread)));};
   const uws=(S.uw||[]).slice().sort((x,y)=>String(y.created||"").localeCompare(String(x.created||"")));
-  const uwOpen=uws.filter(u=>!/approv/i.test(u.status||"")),uwDone=uws.filter(u=>/approv/i.test(u.status||""));
+  const uwOpen=uws.filter(u=>!uwPost(u.status)),uwDone=uws.filter(u=>uwPost(u.status));
   if(uwOpen.length){list.append(el("div",{class:"sect",text:`Underwriting to review · ${uwOpen.length}`}));uwOpen.forEach(u=>list.append(uwRow(u)));}
   section(`Needs a reply · ${open.length}`,open,true);
   section("FYI",fyi,false);
   section("Sent to the bot",dec,false);
-  if(uwDone.length){list.append(el("div",{class:"sect",text:"Approved underwriting"}));uwDone.forEach(u=>list.append(uwRow(u)));}
+  if(uwDone.length){list.append(el("div",{class:"sect",text:"Approved underwriting · deals"}));uwDone.forEach(u=>list.append(uwRow(u)));}
 }
+/* underwriting deal stage → colour (Irwin: Approved yellow, Sent green, Negotiating orange, Accepted green, Declined red) */
+const UWC={approved:"#e3b341",sent:"#30d158",negotiating:"#ff9f0a",accepted:"#30d158",declined:"#ff453a","change requested":"#ff9f0a",draft:"#8e8e93"};
+function uwColor(st){const k=String(st||"Draft").toLowerCase().trim();return UWC[k]||(/declin|dead|pass/.test(k)?UWC.declined:/negot|counter/.test(k)?UWC.negotiating:/accept|contract/.test(k)?UWC.accepted:/sent/.test(k)?UWC.sent:/approv/.test(k)?UWC.approved:"#8e8e93");}
+function uwPost(st){return /approv|sent|negotiat|accept|declin/i.test(String(st||""));}
+window.__uwColor=uwColor;window.__uwPost=uwPost;
 function kfmt(n){if(n===""||n==null)return"–";const x=Number(n);if(!isFinite(x))return"–";const a=Math.abs(x),t=a>=1000?"$"+(Math.round(a/100)/10)+"k":"$"+a;return x<0?"−"+t:t;}
 function uwRow(u){
   return el("button",{class:"row",type:"button",onclick:()=>window.__uw&&window.__uw.open(u.id)},
-    el("span",{class:"dot"},!/approv/i.test(u.status||"")?el("i",{style:"background:#e3b341"}):null),
+    el("span",{class:"dot"},!uwPost(u.status)?el("i",{style:"background:#e3b341"}):null),
     u.photo?el("img",{class:"av uwav",src:u.photo,alt:"",referrerpolicy:"no-referrer"}):el("span",{class:"av offer",text:"UW"}),
     el("span",{class:"rtext"},
-      el("span",{class:"rline"},el("span",{class:"rname",text:String(u.address||"").split(",")[0]}),el("span",{class:"rtime",text:u.status||"Draft"})),
+      el("span",{class:"rline"},el("span",{class:"rname",text:String(u.address||"").split(",")[0]}),el("span",{class:"rtime",style:`color:${uwColor(u.status)};font-weight:600`,text:u.status||"Draft"})),
       el("span",{class:"rprev",text:[u.type,u.grade&&u.grade!=="unknown"?"Grade "+u.grade:"",u.comps?u.comps+" comps":""].filter(Boolean).join(" · ")}),
       el("span",{class:"rtag"},el("b",{text:`ARV ${kfmt(u.arv)} · Rehab ${kfmt(u.rehab)} · `}),el("span",{class:Number(u.max)<0?"negt":"",text:`MIN ${kfmt(u.min)} / MAX ${kfmt(u.max)}`}))));
 }
@@ -179,7 +184,7 @@ function renderThread(){
   if(r.headline)m.append(el("div",{class:"sys"},el("strong",{text:r.headline})));
   if(r.message){m.append(el("div",{class:"sec",text:`Message from ${r.lead||"them"}`}));m.append(el("div",{class:"b in",text:r.message}));}
   if(r.details){m.append(el("div",{class:"sec",text:isOffer(r)?"Underwriting & history":"Notes"}));m.append(notesCard(r.details));}
-  const uwr=uwFor(r);if(uwr)m.append(el("button",{class:"uwopen",type:"button",onclick:()=>window.__uw&&window.__uw.open(uwr.id)},el("span",{},el("b",{text:"Review underwriting"}),el("small",{text:`Map · ${uwr.comps||""} comps · repair list${uwr.status?" · "+uwr.status:""}`})),el("span",{class:"chev",text:"›"})));
+  const uwr=uwFor(r);if(uwr)m.append(el("button",{class:"uwopen",type:"button",onclick:()=>window.__uw&&window.__uw.open(uwr.id)},el("span",{},el("b",{text:"Review underwriting"}),el("small",{},`Map · ${uwr.comps||""} comps · repair list`,uwr.status?el("span",{style:`color:${uwColor(uwr.status)};font-weight:600`,text:" · "+uwr.status}):null)),el("span",{class:"chev",text:"›"})));
   if(r.link)m.append(el("a",{class:"linkb",href:r.link,target:"_blank",rel:"noopener",text:"Open link ↗"}));
   if(isOffer(r)&&money(r.amount))m.append(el("div",{class:"amt",text:`Offer ${money(r.amount)}`}));
   if(r.draft){m.append(el("div",{class:"sec r",text:"Draft – sends only when approved"}));m.append(el("div",{class:"b out draft",text:r.draft}));}
