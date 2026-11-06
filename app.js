@@ -212,6 +212,7 @@ async function decide(r,decision,note){
     try{TG.BackButton.onClick(closeThread);}catch(e){}
     INIT=TG.initData||"";START=(TG.initDataUnsafe&&TG.initDataUnsafe.start_param)||"";
   }
+  if(!START){try{START=new URLSearchParams(location.search).get("task")||"";}catch(e){}}
   S.ready=true;
   if(!INIT){$("sub").textContent="";$("list").replaceChildren(errorBox(new Error("NOT_TELEGRAM")));return;}
   try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c&&c.values){S.me=c.me;S.isOwner=c.isOwner;S.rows=parse(c.values);renderList();}}catch(e){}
