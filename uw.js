@@ -18,6 +18,9 @@ const css=`
 .uwk span{display:block;font-size:11px;color:#8e8e93;text-transform:uppercase;letter-spacing:.4px}
 .uwk b{font-size:17px;font-variant-numeric:tabular-nums}
 .uwk.gold b{color:#e3b341}
+.uwk.neg b{color:#ff453a}
+.uwk.neg{box-shadow:inset 0 0 0 1px #5a2a24}
+.uwnote{margin:6px 16px 0;font-size:12px;color:#ff9f8a}
 .uwtabs{position:sticky;top:0;z-index:5;background:#000;padding:10px 16px 8px}
 .uwtabs .seg{display:flex;background:#1c1c1e;border-radius:9px;padding:2px;gap:2px}
 .uwtabs .seg button{flex:1;border:0;background:transparent;color:#fff;font-size:13px;font-weight:600;padding:8px 4px;border-radius:7px}
@@ -54,6 +57,7 @@ const css=`
 .carn{text-align:center;color:#8e8e93;font-size:12px;margin:6px 0}
 .sheet{position:fixed;inset:0;z-index:30;background:#000;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .4s cubic-bezier(.32,.72,0,1)}
 .sheet.on{transform:none}
+.sheet .grab{width:38px;height:5px;border-radius:3px;background:#3a3a3c;margin:6px auto 0}
 .sheet .sh{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) 16px 10px;border-bottom:1px solid #262629}
 .sheet .sh b{font-size:15px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sheet .sb{flex:1;overflow-y:auto;padding:12px 16px 30px}
@@ -78,7 +82,8 @@ const st=document.createElement("style");st.textContent=css;document.head.append
 const $=id=>document.getElementById(id);
 const E=(tag,attrs={},...kids)=>{const n=document.createElement(tag);for(const[k,v]of Object.entries(attrs)){if(k==="class")n.className=v;else if(k==="text")n.textContent=v;else if(k.startsWith("on"))n.addEventListener(k.slice(2),v);else if(v!=null&&v!==false)n.setAttribute(k,v);}for(const c of kids)if(c!=null&&c!==false)n.append(c);return n;};
 const $$=n=>{const x=Number(n);return isFinite(x)&&x>0?"$"+x.toLocaleString("en-US",{maximumFractionDigits:0}):"–";};
-const k=n=>{const x=Number(n);if(!(x>0))return"–";return x>=1000?"$"+(Math.round(x/100)/10).toLocaleString("en-US")+"k":"$"+x;};
+const k=n=>{if(n===""||n==null)return"–";const x=Number(n);if(!isFinite(x))return"–";const a=Math.abs(x),t=a>=1000?"$"+(Math.round(a/100)/10).toLocaleString("en-US")+"k":"$"+a;return x<0?"−"+t:t;};
+const negc=n=>Number(n)<0?" neg":"";
 const img=(src,cls,alt)=>src?E("img",{src,class:cls||"",alt:alt||"",loading:"lazy",referrerpolicy:"no-referrer",onerror:function(){this.replaceWith(E("div",{class:"noimg",text:"no photo"}));}}):E("div",{class:"noimg",text:"no photo"});
 
 const view=E("section",{id:"uwView","aria-label":"Underwriting"});
@@ -101,8 +106,8 @@ function ptxt(label,text){return text?E("div",{class:"ptxt"},E("span",{class:"lb
 
 function openSheet(title,body){
   sheet&&sheet.remove();
-  sheet=E("div",{class:"sheet"},E("div",{class:"sh"},E("b",{text:title}),E("button",{class:"xbtn",type:"button",onclick:closeSheet},"Done")),E("div",{class:"sb"},...body));
-  document.body.appendChild(sheet);requestAnimationFrame(()=>requestAnimationFrame(()=>sheet.classList.add("on")));
+  sheet=E("div",{class:"sheet"},E("div",{style:"padding-top:calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px))"},E("div",{class:"grab"})),E("div",{class:"sh",style:"padding-top:8px"},E("b",{text:title}),E("button",{class:"xbtn",type:"button",onclick:closeSheet},"Done")),E("div",{class:"sb"},...body));
+  sheetSwipe(sheet);document.body.appendChild(sheet);requestAnimationFrame(()=>requestAnimationFrame(()=>sheet.classList.add("on")));
   window.__uwHaptic&&window.__uwHaptic();
 }
 function closeSheet(){if(!sheet)return;const s=sheet;sheet=null;s.classList.remove("on");setTimeout(()=>s.remove(),420);}
@@ -110,7 +115,7 @@ function closeSheet(){if(!sheet)return;const s=sheet;sheet=null;s.classList.remo
 function compSheet(c){
   openSheet(`Comp ${c.n} · ${c.address}`,[
     carousel(c.photos,c.address),
-    kv([["Sold",`${$$(c.soldPrice)}${c.soldDate?" · "+c.soldDate:""}`],["$ / sq ft",c.ppsf?"$"+Math.round(c.ppsf):"–"],["Beds / baths",`${c.beds??"–"} / ${c.baths??"–"}`],["Sq ft",c.sqft?Number(c.sqft).toLocaleString():"–"],["Year built",c.yearBuilt||"–"],["Siding",c.siding||"–"],["Distance",c.distanceMi!=null?`${c.distanceMi} mi`:"–"],["Neighborhood",c._hood||"–"]]),
+    kv([["Type",c.type||"–"],["Sold",`${$$(c.soldPrice)}${c.soldDate?" · "+c.soldDate:""}`],["$ / sq ft",c.ppsf?"$"+Math.round(c.ppsf):"–"],["Beds / baths",`${c.beds??"–"} / ${c.baths??"–"}`],["Sq ft",c.sqft?Number(c.sqft).toLocaleString():"–"],["Year built",c.yearBuilt||"–"],["Siding",c.siding||"–"],["Distance",c.distanceMi!=null?`${c.distanceMi} mi`:"–"],["Neighborhood",c._hood||"–"]]),
     ptxt("Condition",c.condition),ptxt("Why it counts",c.why),
     (c.flags&&c.flags.length)?E("div",{},...c.flags.map(f=>E("span",{class:"flag",text:f}))):null,
     c.url?E("a",{class:"uwbtn",href:c.url,target:"_blank",rel:"noopener"},"Open listing",E("span",{text:"↗"})):null
@@ -118,7 +123,7 @@ function compSheet(c){
 }
 function subjectSheet(){const s=U.subject||{};openSheet(s.address||"Subject",[carousel(s.photos,s.address),subjectDetails()]);}
 function subjectDetails(){const s=U.subject||{};return E("div",{},
-  kv([["Asking",$$(s.asking)],["Beds / baths",`${s.beds??"–"} / ${s.baths??"–"}`],["Sq ft",s.sqft?Number(s.sqft).toLocaleString():"–"],["Year built",s.yearBuilt||"–"],["Lot",s.lotSqft?Number(s.lotSqft).toLocaleString()+" sq ft":"–"],["Siding",s.siding||"–"],["Neighborhood",[s.neighborhood,s.grade&&s.grade!=="unknown"?`(${s.grade})`:""].filter(Boolean).join(" ")||"–"]]),
+  kv([["Type",s.type||"–"],["Asking",$$(s.asking)],["Beds / baths",`${s.beds??"–"} / ${s.baths??"–"}`],["Sq ft",s.sqft?Number(s.sqft).toLocaleString():"–"],["Year built",s.yearBuilt||"–"],["Lot",s.lotSqft?Number(s.lotSqft).toLocaleString()+" sq ft":"–"],["Siding",s.siding||"–"],["Neighborhood",[s.neighborhood,s.grade&&s.grade!=="unknown"?`(${s.grade})`:""].filter(Boolean).join(" ")||"–"]]),
   ptxt("Condition",s.condition),
   (s.notes&&s.notes.length)?E("div",{class:"ptxt"},E("span",{class:"lbl",text:"Notes"}),...s.notes.map(x=>E("div",{text:"• "+x}))):null,
   ptxt("How ARV was set",U.arv&&U.arv.method),ptxt("Offer formula",U.offer&&U.offer.formula),
@@ -130,7 +135,7 @@ function paneComps(){
   (U.comps||[]).forEach(c=>p.append(E("button",{class:"ccard",type:"button",onclick:()=>compSheet(c)},
     img((c.photos||[])[0],"",c.address),
     E("div",{class:"ci"},E("div",{class:"p"},E("span",{class:"n",text:String(c.n)}),$$(c.soldPrice)),E("div",{class:"a",text:c.address}),
-      E("div",{class:"m",text:[`${c.beds??"–"}bd/${c.baths??"–"}ba`,c.sqft?Number(c.sqft).toLocaleString()+" sf":"",c.ppsf?"$"+Math.round(c.ppsf)+"/sf":"",c.distanceMi!=null?c.distanceMi+" mi":"",c.soldDate||""].filter(Boolean).join(" · ")}),c._hood?E("div",{class:"m",text:"Area "+c._hood}):null,
+      E("div",{class:"m",text:[c.type||"",`${c.beds??"–"}bd/${c.baths??"–"}ba`,c.sqft?Number(c.sqft).toLocaleString()+" sf":"",c.ppsf?"$"+Math.round(c.ppsf)+"/sf":"",c.distanceMi!=null?c.distanceMi+" mi":"",c.soldDate||""].filter(Boolean).join(" · ")}),c._hood?E("div",{class:"m",text:"Area "+c._hood}):null,
       ...(c.flags||[]).map(f=>E("span",{class:"flag",text:f}))))));
   if(U.rejected&&U.rejected.length){p.append(E("div",{class:"grp"},E("span",{text:`Not used · ${U.rejected.length}`})));U.rejected.forEach(r=>p.append(E("div",{class:"skip"},E("b",{text:r.address}),` – ${r.reason}`)));}
   return p;
@@ -188,11 +193,12 @@ function render(rec){
   U=rec.data;const s=U.subject||{},st=rec.status||"Draft";
   const stCls=/approv/i.test(st)?"uwst ok":/change/i.test(st)?"uwst chg":"uwst";
   view.replaceChildren(
-    E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:s.address||"Underwriting"}),E("span",{text:`Underwriting · ${U.bot||""}${U.confidence?" · "+U.confidence+" confidence":""}`})),E("span",{class:stCls,text:st})),
+    E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:s.address||"Underwriting"}),E("span",{text:[s.type,`${s.beds??"–"}bd/${s.baths??"–"}ba`,U.confidence?U.confidence+" confidence":""].filter(Boolean).join(" · ")})),E("span",{class:stCls,text:st})),
     E("div",{class:"uwbody"},
       E("div",{id:"uwMap"}),
-      E("div",{class:"uwsum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("div",{class:"uwk"},E("span",{text:"MIN"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"},E("span",{text:"MAX"}),E("b",{text:k(U.offer&&U.offer.max)})),E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)}))),
-      E("div",{class:"uwtabs",id:"uwTabs"},E("div",{class:"seg"},...[["comps",`Comps (${(U.comps||[]).length})`],["repairs","Repairs"],["subject","Subject"]].map(([t,l])=>E("button",{type:"button","data-t":t,"aria-pressed":"false",onclick:()=>{tab=t;renderPane();window.__uwHaptic&&window.__uwHaptic();}},l)))),
+      E("div",{class:"uwsum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)})),E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)}))),
+      (Number(U.offer&&U.offer.max)<0)?E("div",{class:"uwnote",text:"MAX is below $0 – the numbers don't work at this rehab. See Subject › Offer formula."}):null,
+      E("div",{class:"uwtabs",id:"uwTabs"},E("div",{class:"seg"},...[["comps",`Comps (${(U.comps||[]).length})`],["subject","Subject"],["repairs","Repairs"]].map(([t,l])=>E("button",{type:"button","data-t":t,"aria-pressed":"false",onclick:()=>{tab=t;renderPane();window.__uwHaptic&&window.__uwHaptic();}},l)))),
       E("div",{id:"uwPane"})),
     dock(rec));
   renderPane();drawMap();
@@ -231,5 +237,21 @@ async function open(key){
   opening=false;
 }
 function close(){if(lb.classList.contains("on")){lb.classList.remove("on");return;}if(sheet){closeSheet();return;}view.classList.remove("on");window.__uwApi.backOff();setTimeout(()=>{if(map){map.remove();map=null;}},450);}
+const TABS=["comps","subject","repairs"];
+function goTab(dir){const i=TABS.indexOf(tab),j=i+dir;if(j<0||j>=TABS.length)return false;tab=TABS[j];const p=$("uwPane");renderPane();
+  p.style.transition="none";p.style.transform=`translateX(${dir>0?40:-40}px)`;p.style.opacity=".3";void p.offsetWidth;p.style.transition="transform .3s cubic-bezier(.32,.72,0,1),opacity .25s";p.style.transform="";p.style.opacity="";
+  const tb=$("uwTabs");if(tb){const b=view.querySelector(".uwbody");if(b.scrollTop>tb.offsetTop)b.scrollTop=tb.offsetTop;}window.__uwHaptic&&window.__uwHaptic();return true;}
+(function(){let x0=null,y0=null,t0=0,mode=null,dx=0;
+  view.addEventListener("touchstart",e=>{if(e.touches.length!==1||sheet){x0=null;return;}const t=e.target;if(t.closest&&t.closest("#uwMap,.car,.uwsum,.uwdock,textarea")){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now();mode=null;dx=0;},{passive:true});
+  view.addEventListener("touchmove",e=>{if(x0===null)return;dx=e.touches[0].clientX-x0;const dy=e.touches[0].clientY-y0;if(!mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;mode=Math.abs(dx)>Math.abs(dy)*1.3?"tab":"scroll";}
+    if(mode==="tab"){const p=$("uwPane");if(p){p.style.transition="none";p.style.transform=`translateX(${dx*0.6}px)`;}}},{passive:true});
+  view.addEventListener("touchend",()=>{if(x0===null)return;x0=null;if(mode!=="tab")return;const p=$("uwPane");const go=Math.abs(dx)>70||(Date.now()-t0<300&&Math.abs(dx)>35);
+    if(!(go&&goTab(dx<0?1:-1))&&p){p.style.transition="transform .3s cubic-bezier(.32,.72,0,1)";p.style.transform="";}mode=null;},{passive:true});
+})();
+function sheetSwipe(sh){const body=sh.querySelector(".sb");let y0=null,dy=0,t0=0,active=false;
+  sh.addEventListener("touchstart",e=>{if(e.touches.length!==1)return;const t=e.target;if(t.closest&&t.closest(".car")&&false)return;y0=e.touches[0].clientY;dy=0;t0=Date.now();active=false;},{passive:true});
+  sh.addEventListener("touchmove",e=>{if(y0===null)return;dy=e.touches[0].clientY-y0;if(!active){if(dy>8&&body.scrollTop<=0)active=true;else if(Math.abs(dy)>8){y0=null;return;}}
+    if(active){sh.style.transition="none";sh.style.transform=`translateY(${Math.max(0,dy)}px)`;}},{passive:true});
+  sh.addEventListener("touchend",()=>{if(y0===null)return;y0=null;if(!active)return;sh.style.transition="";if(dy>110||(Date.now()-t0<300&&dy>50)){sh.style.transform="";closeSheet();}else sh.style.transform="";active=false;},{passive:true});}
 window.__uw={open,close,isOpen:()=>view.classList.contains("on")};
 })();
