@@ -43,6 +43,15 @@ const css=`
 .rl .rt b{font-variant-numeric:tabular-nums;color:#e3b341;white-space:nowrap}
 .rl .rr{font-size:14px;color:#c7c7cc;margin-top:3px;line-height:1.35}
 .rl .rs{font-size:11px;color:#636366;margin-top:4px}
+.pnav{display:flex;align-items:center;justify-content:space-between;margin:18px 0 6px;color:#8e8e93;font-size:13px}
+.pnav button{background:#1c1c1e;border:1px solid #3a3a3c;color:#0a84ff;border-radius:999px;padding:8px 14px;font:600 14px system-ui}
+.pnav button:disabled{color:#48484a}
+.rbig{display:block;width:100%;height:62vw;max-height:380px;object-fit:cover;border-radius:14px;background:#1c1c1e}
+.rbig.noimg{display:grid;place-items:center;color:#636366;font-size:14px}
+.rhead{display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;color:#8e8e93;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.rhead b{color:#e3b341;font-size:22px;letter-spacing:0}
+.ritem{font-size:20px;font-weight:700;margin:2px 0 4px}
+.rl{cursor:pointer}
 .skip{font-size:14px;color:#8e8e93;padding:8px 0;border-top:1px solid #1c1c1e}
 .skip b{color:#c7c7cc;font-weight:600}
 .tot{display:flex;justify-content:space-between;font-weight:700;font-size:17px;padding:14px 2px 4px;border-top:1px solid #2c2c2e;margin-top:10px}
@@ -57,6 +66,9 @@ const css=`
 .carn{text-align:center;color:#8e8e93;font-size:12px;margin:6px 0}
 .sheet{position:fixed;inset:0;z-index:30;background:#000;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .4s cubic-bezier(.32,.72,0,1)}
 .sheet.on{transform:none}
+html{overflow:hidden}
+.sheet{width:100%;max-width:100vw;overflow:hidden}
+.sheet .sb{overflow-x:hidden}
 .sheet .grab{width:38px;height:5px;border-radius:3px;background:#3a3a3c;margin:6px auto 0}
 .sheet .sh{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) 16px 10px;border-bottom:1px solid #262629}
 .sheet .sh b{font-size:15px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -112,15 +124,40 @@ function openSheet(title,body){
 }
 function closeSheet(){if(!sheet)return;const s=sheet;sheet=null;s.classList.remove("on");setTimeout(()=>s.remove(),420);}
 
-function compSheet(c){
-  openSheet(`Comp ${c.n} · ${c.address}`,[
+/* pager: one item per page in a sheet; swipe left/right (or the arrows) to move between items */
+function openPager(items,idx,titleOf,bodyOf){
+  let i=idx;const sb=()=>sheet&&sheet.querySelector(".sb");
+  const nav=()=>E("div",{class:"pnav"},E("button",{type:"button",disabled:i<=0?"":null,onclick:()=>go(-1)},"‹ Prev"),E("span",{text:`${i+1} of ${items.length}`}),E("button",{type:"button",disabled:i>=items.length-1?"":null,onclick:()=>go(1)},"Next ›"));
+  const paint=()=>{const b=sb();if(!b)return;sheet.querySelector(".sh b").textContent=titleOf(items[i],i);b.replaceChildren(...bodyOf(items[i],i),nav());b.scrollTop=0;};
+  function go(d){const j=i+d;if(j<0||j>=items.length){window.__uwApi.toast(d>0?"That's the last one":"That's the first one");return false;}const b=sb();
+    b.style.transition="transform .18s ease-in,opacity .18s";b.style.transform=`translateX(${d>0?-60:60}px)`;b.style.opacity="0";
+    setTimeout(()=>{i=j;paint();b.style.transition="none";b.style.transform=`translateX(${d>0?60:-60}px)`;void b.offsetWidth;b.style.transition="transform .3s cubic-bezier(.32,.72,0,1),opacity .25s";b.style.transform="";b.style.opacity="";},170);
+    window.__uwHaptic&&window.__uwHaptic();return true;}
+  openSheet(titleOf(items[i],i),[...bodyOf(items[i],i),nav()]);
+  const sh=sheet,b=sb();let x0=null,y0=null,t0=0,mode=null,dx=0;
+  b.addEventListener("touchstart",e=>{if(e.touches.length!==1)return;const t=e.target;const car=t.closest&&t.closest(".car");if(car&&car.children.length>1){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now();mode=null;dx=0;},{passive:true});
+  b.addEventListener("touchmove",e=>{if(x0===null)return;dx=e.touches[0].clientX-x0;const dy=e.touches[0].clientY-y0;if(!mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;mode=Math.abs(dx)>Math.abs(dy)*1.3?"page":"none";}
+    if(mode==="page"){b.style.transition="none";b.style.transform=`translateX(${dx*0.7}px)`;}},{passive:true});
+  b.addEventListener("touchend",()=>{if(x0===null)return;x0=null;if(mode!=="page")return;const ok=(Math.abs(dx)>70||(Date.now()-t0<300&&Math.abs(dx)>35))&&go(dx<0?1:-1);
+    if(!ok){b.style.transition="transform .3s cubic-bezier(.32,.72,0,1)";b.style.transform="";}mode=null;},{passive:true});
+}
+function compBody(c){return[
+    carousel(c.photos,c.address),
     carousel(c.photos,c.address),
     kv([["Type",c.type||"–"],["Sold",`${$$(c.soldPrice)}${c.soldDate?" · "+c.soldDate:""}`],["$ / sq ft",c.ppsf?"$"+Math.round(c.ppsf):"–"],["Beds / baths",`${c.beds??"–"} / ${c.baths??"–"}`],["Sq ft",c.sqft?Number(c.sqft).toLocaleString():"–"],["Year built",c.yearBuilt||"–"],["Siding",c.siding||"–"],["Distance",c.distanceMi!=null?`${c.distanceMi} mi`:"–"],["Neighborhood",c._hood||"–"]]),
     ptxt("Condition",c.condition),ptxt("Why it counts",c.why),
     (c.flags&&c.flags.length)?E("div",{},...c.flags.map(f=>E("span",{class:"flag",text:f}))):null,
     c.url?E("a",{class:"uwbtn",href:c.url,target:"_blank",rel:"noopener"},"Open listing",E("span",{text:"↗"})):null
-  ]);
-}
+  ].filter(Boolean);}
+function compSheet(c){const L=U.comps||[];openPager(L,Math.max(0,L.indexOf(c)),x=>`Comp ${x.n} · ${String(x.address||"").split(",")[0]}`,x=>compBody(x));}
+function repairLines(){const lines=(U.rehab&&U.rehab.lines)||[];const order=[];const g={};lines.forEach(l=>{const a=l.area||"Other";if(!g[a]){g[a]=[];order.push(a);}g[a].push(l);});return order.flatMap(a=>g[a]);}
+function repairBody(l){return[
+  l.photo?E("img",{class:"rbig",src:l.photo,referrerpolicy:"no-referrer",alt:l.item,onclick:()=>lightbox(l.photo,`${l.item} – ${l.photoNote||""}`)}):E("div",{class:"rbig noimg",text:"No photo for this line"}),
+  l.photoNote?E("div",{class:"carn",text:"Look at: "+l.photoNote}):null,
+  E("div",{class:"rhead"},E("span",{text:l.area||""}),E("b",{text:$$(l.cost)})),
+  E("div",{class:"ritem",text:l.item}),
+  ptxt("Why it needs work",l.reason),ptxt("Priced from",l.source)].filter(Boolean);}
+function repairSheet(l){const L=repairLines();openPager(L,Math.max(0,L.indexOf(l)),(x,i)=>`Repair ${i+1} · ${x.item}`,x=>repairBody(x));}
 function subjectSheet(){const s=U.subject||{};openSheet(s.address||"Subject",[carousel(s.photos,s.address),subjectDetails()]);}
 function subjectDetails(){const s=U.subject||{};return E("div",{},
   kv([["Type",s.type||"–"],["Asking",$$(s.asking)],["Beds / baths",`${s.beds??"–"} / ${s.baths??"–"}`],["Sq ft",s.sqft?Number(s.sqft).toLocaleString():"–"],["Year built",s.yearBuilt||"–"],["Lot",s.lotSqft?Number(s.lotSqft).toLocaleString()+" sq ft":"–"],["Siding",s.siding||"–"],["Neighborhood",[s.neighborhood,s.grade&&s.grade!=="unknown"?`(${s.grade})`:""].filter(Boolean).join(" ")||"–"]]),
@@ -145,8 +182,8 @@ function paneRepairs(){
   lines.forEach(l=>{(groups[l.area||"Other"]=groups[l.area||"Other"]||[]).push(l);});
   Object.entries(groups).forEach(([area,ls])=>{
     p.append(E("div",{class:"grp"},E("span",{text:area}),E("span",{text:$$(ls.reduce((a,b)=>a+Number(b.cost||0),0))})));
-    ls.forEach(l=>p.append(E("div",{class:"rl"},
-      l.photo?E("img",{src:l.photo,loading:"lazy",referrerpolicy:"no-referrer",alt:l.item,onclick:()=>lightbox(l.photo,`${l.item} – ${l.photoNote||l.reason||""}`)}):E("div",{class:"noimg",text:"no photo"}),
+    ls.forEach(l=>p.append(E("div",{class:"rl",role:"button",tabindex:"0",onclick:()=>repairSheet(l)},
+      l.photo?E("img",{src:l.photo,loading:"lazy",referrerpolicy:"no-referrer",alt:l.item}):E("div",{class:"noimg",text:"no photo"}),
       E("div",{class:"ri"},E("div",{class:"rt"},E("span",{text:l.item}),E("b",{text:$$(l.cost)})),E("div",{class:"rr",text:l.reason||""}),(l.photoNote||l.source)?E("div",{class:"rs",text:[l.photoNote,l.source].filter(Boolean).join(" · ")}):null))));
   });
   p.append(E("div",{class:"tot"},E("span",{text:"Rehab total"}),E("b",{text:$$(U.rehab&&U.rehab.total)})));
