@@ -106,7 +106,7 @@ document.body.appendChild(view);
 const lb=E("div",{class:"lightbox",onclick:()=>lb.classList.remove("on")});document.body.appendChild(lb);
 function lightbox(src,cap){lb.replaceChildren(E("img",{src,referrerpolicy:"no-referrer"}),cap?E("div",{class:"cap",text:cap}):null);lb.classList.add("on");}
 
-let U=null,tab="comps",map=null,sheet=null;
+let U=null,tab="subject",map=null,sheet=null;
 function loadLeaflet(){if(window.L)return Promise.resolve();return new Promise((res,rej)=>{const l=document.createElement("link");l.rel="stylesheet";l.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";document.head.appendChild(l);const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
 
 function carousel(photos,label){
@@ -266,7 +266,7 @@ function render(rec){
       E("div",{id:"uwMap"}),
       E("div",{class:"uwsum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)})),E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)}))),
       (Number(U.offer&&U.offer.max)<0)?E("div",{class:"uwnote",text:"MAX is below $0 – the numbers don't work at this rehab. See Subject › Offer formula."}):null,
-      E("div",{class:"uwtabs",id:"uwTabs"},E("div",{class:"seg"},...[["comps",`Comps (${(U.comps||[]).length})`],["subject","Subject"],["repairs","Repairs"]].map(([t,l])=>E("button",{type:"button","data-t":t,"aria-pressed":"false",onclick:()=>{tab=t;renderPane();window.__uwHaptic&&window.__uwHaptic();}},l)))),
+      E("div",{class:"uwtabs",id:"uwTabs"},E("div",{class:"seg"},...[["subject","Subject"],["comps",`Comps (${(U.comps||[]).length})`],["repairs","Repairs"]].map(([t,l])=>E("button",{type:"button","data-t":t,"aria-pressed":"false",onclick:()=>{tab=t;renderPane();window.__uwHaptic&&window.__uwHaptic();}},l)))),
       E("div",{id:"uwPane"})),
     dock(rec));
   renderPane();drawMap();
@@ -300,12 +300,12 @@ async function open(key){
   if(opening)return;opening=true;const api=window.__uwApi;
   view.replaceChildren(E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:"Loading underwriting…"})),E("span")),E("div",{class:"uwbody"},E("div",{id:"uwMap"})));
   view.classList.add("on");api.backOn(close);
-  try{const rec=await api.run("getUnderwriting",key);if(!rec)throw new Error("NOT_FOUND");tab="comps";render(rec);}
+  try{const rec=await api.run("getUnderwriting",key);if(!rec)throw new Error("NOT_FOUND");tab="subject";render(rec);}
   catch(e){api.toast("Couldn't load the underwriting");close();}
   opening=false;
 }
 function close(){if(lb.classList.contains("on")){lb.classList.remove("on");return;}if(sheet){closeSheet();return;}view.classList.remove("on");window.__uwApi.backOff();setTimeout(()=>{if(map){map.remove();map=null;}},450);}
-const TABS=["comps","subject","repairs"];
+const TABS=["subject","comps","repairs"];
 function goTab(dir){const i=TABS.indexOf(tab),j=i+dir;if(j<0||j>=TABS.length)return false;tab=TABS[j];const p=$("uwPane");renderPane();
   p.style.transition="none";p.style.transform=`translateX(${dir>0?40:-40}px)`;p.style.opacity=".3";void p.offsetWidth;p.style.transition="transform .3s cubic-bezier(.32,.72,0,1),opacity .25s";p.style.transform="";p.style.opacity="";
   const tb=$("uwTabs");if(tb){const b=view.querySelector(".uwbody");if(b.scrollTop>tb.offsetTop)b.scrollTop=tb.offsetTop;}window.__uwHaptic&&window.__uwHaptic();return true;}
