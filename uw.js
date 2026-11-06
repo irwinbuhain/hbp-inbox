@@ -207,7 +207,7 @@ function backToComp(c){const L=U.comps||[];const under=sheet;openPager(L,Math.ma
 function compSheetDown(){const s=U.subject||{},cur=pagerCur();revealUnder("Subject · "+String(s.address||"").split(",")[0],[E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n} · swipe up`),...subjectBody(),E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n}`)],null,()=>backToComp(cur));}
 function recalc(d){const lines=(d.rehab&&d.rehab.lines)||[];const before=Number((d.rehab||{}).total)||0;const total=lines.filter(l=>!l.removed).reduce((a,l)=>a+(Number(l.cost)||0),0);d.rehab.total=total;
   const o=d.offer||{},arv=Number((d.arv||{}).value)||0;if(o.originalMin===undefined){o.originalMin=o.min;o.originalMax=o.max;o.originalRehab=before;if(o.holdMax!=null)o.originalHoldMax=o.holdMax;}
-  if(arv&&typeof o.max==="number"&&typeof o.min==="number"){const ask=Number(o.asking||(d.subject||{}).asking)||0;let max=Math.round(.72*arv-total-10000);if(ask)max=Math.min(max,ask-10000);let min=Math.round(.67*arv-total-10000);min=Math.min(min,max-10000);o.max=max;o.min=min;}
+  if(arv&&typeof o.max==="number"&&typeof o.min==="number"){const ask=Number(o.asking||(d.subject||{}).asking)||0;let max=Math.round(.72*arv-total-10000);if(ask)max=Math.min(max,ask-25000);let min=Math.round(.67*arv-total-10000);min=Math.min(min,max-10000);o.max=max;o.min=min;}
   if(typeof o.originalHoldMax==="number")o.holdMax=Math.round(o.originalHoldMax+(Number(o.originalRehab)-total));d.offer=o;return d;}
 async function editLine(l,action,reason,newCost){
   const api=window.__uwApi;if(!api.isOwner()){api.toast("Only Irwin can change the repair budget");return;}
