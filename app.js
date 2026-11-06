@@ -253,6 +253,7 @@ async function decide(r,decision,note){
   S.ready=true;
   if(!INIT){$("sub").textContent="";$("list").replaceChildren(errorBox(new Error("NOT_TELEGRAM")));return;}
   try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c&&c.values){S.me=c.me;S.isOwner=c.isOwner;S.rows=parse(c.values);S.uw=c.uw||[];renderList();}}catch(e){}
+  if(/^UW-/.test(START)){const t=setInterval(()=>{if(window.__uw){clearInterval(t);window.__uw.open(START);}},100);}
   if(START&&S.rows.find(r=>r.id===START))openThread(START);
   await load(false);
   if(START&&S.view!=="thread"&&S.rows.find(r=>r.id===START))openThread(START);
