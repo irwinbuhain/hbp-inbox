@@ -43,6 +43,7 @@ const css=`
 .rl .rt b{font-variant-numeric:tabular-nums;color:#e3b341;white-space:nowrap}
 .rl .rr{font-size:14px;color:#c7c7cc;margin-top:3px;line-height:1.35}
 .rl .rs{font-size:11px;color:#636366;margin-top:4px}
+.cmap{height:190px;border-radius:14px;overflow:hidden;margin-top:12px;background:#111}
 .pnav{display:flex;align-items:center;justify-content:space-between;margin:18px 0 6px;color:#8e8e93;font-size:13px}
 .pnav button{background:#1c1c1e;border:1px solid #3a3a3c;color:#0a84ff;border-radius:999px;padding:8px 14px;font:600 14px system-ui}
 .pnav button:disabled{color:#48484a}
@@ -131,7 +132,7 @@ function revealUnder(title,body,onDown){
   if(top){top.style.transition="";top.style.transform="";top.classList.remove("on");setTimeout(()=>{top.remove();under.style.zIndex="";under.style.transition="";},420);}
   window.__uwHaptic&&window.__uwHaptic();
 }
-function closeSheet(){if(!sheet)return;const s=sheet;sheet=null;s.classList.remove("on");setTimeout(()=>s.remove(),420);}
+function closeSheet(){if(cmap){try{cmap.remove();}catch(e){}cmap=null;}if(!sheet)return;const s=sheet;sheet=null;s.classList.remove("on");setTimeout(()=>s.remove(),420);}
 
 /* pager: one item per page in a sheet; swipe left/right (or the arrows) to move between items */
 function openPager(items,idx,titleOf,bodyOf,onDown){
@@ -150,8 +151,24 @@ function openPager(items,idx,titleOf,bodyOf,onDown){
   b.addEventListener("touchend",()=>{if(x0===null)return;x0=null;if(mode!=="page")return;const ok=(Math.abs(dx)>70||(Date.now()-t0<300&&Math.abs(dx)>35))&&go(dx<0?1:-1);
     if(!ok){b.style.transition="transform .3s cubic-bezier(.32,.72,0,1)";b.style.transform="";}mode=null;},{passive:true});
 }
+let cmap=null;
+function compMap(c){
+  const d=E("div",{class:"cmap"});const s=U.subject||{};
+  if(!(c.lat&&c.lng))return null;
+  setTimeout(async()=>{try{await loadLeaflet();}catch(e){d.textContent="Map couldn't load";return;}if(!d.isConnected)return;
+    if(cmap){try{cmap.remove();}catch(e){}cmap=null;}
+    cmap=L.map(d,{zoomControl:false,attributionControl:false,dragging:false,touchZoom:false,doubleClickZoom:false,scrollWheelZoom:false,boxZoom:false,keyboard:false,tap:false});
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:16}).addTo(cmap);
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:16}).addTo(cmap);
+    const pts=[[c.lat,c.lng]];
+    if(s.lat&&s.lng){pts.push([s.lat,s.lng]);L.polyline(pts,{color:"#8e8e93",weight:2,dashArray:"4 6"}).addTo(cmap);L.marker([s.lat,s.lng],{icon:L.divIcon({className:"uwpin s",html:"★",iconSize:[30,30]}),zIndexOffset:1000,interactive:false}).addTo(cmap);}
+    L.marker([c.lat,c.lng],{icon:L.divIcon({className:"uwpin",html:String(c.n),iconSize:[24,24]}),interactive:false}).addTo(cmap);
+    if(pts.length>1)cmap.fitBounds(pts,{padding:[34,34],maxZoom:16});else cmap.setView(pts[0],15);
+    setTimeout(()=>cmap&&cmap.invalidateSize(),300);},0);
+  return E("div",{},d,E("div",{class:"carn",text:`★ Subject · ${c.n} This comp${c.distanceMi!=null?" · "+c.distanceMi+" mi apart":""}`}));
+}
 function compBody(c){return[
-    carousel(c.photos,c.address),
+    carousel(c.photos,c.address),compMap(c),
     kv([["Type",c.type||"–"],["Sold",`${$$(c.soldPrice)}${c.soldDate?" · "+c.soldDate:""}`],["$ / sq ft",c.ppsf?"$"+Math.round(c.ppsf):"–"],["Beds / baths",`${c.beds??"–"} / ${c.baths??"–"}`],["Sq ft",c.sqft?Number(c.sqft).toLocaleString():"–"],["Year built",c.yearBuilt||"–"],["Siding",c.siding||"–"],["Distance",c.distanceMi!=null?`${c.distanceMi} mi`:"–"],["Neighborhood",c._hood||"–"]]),
     ptxt("Condition",c.condition),ptxt("Why it counts",c.why),
     (c.flags&&c.flags.length)?E("div",{},...c.flags.map(f=>E("span",{class:"flag",text:f}))):null,
