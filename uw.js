@@ -48,7 +48,13 @@ const css=`
 .sb .backcomp:last-child{margin:16px 0 0}
 .rl.removed{opacity:.5}.rl.removed .rt span,.rl.removed .rt b{text-decoration:line-through}.rl.removed .rr{color:#ff9f8a}
 .rbtn{display:block;width:100%;margin-top:14px;background:#2c1a17;border:1px solid #5a2a24;color:#ff6961;border-radius:12px;padding:12px;font:600 15px system-ui}
-.rbtn:disabled{opacity:.45}.rbtn.ok{background:#0f3d1e;border-color:#1f6b36;color:#5be37f}
+.rbtn:disabled{opacity:.45}
+.rbtn.edit{background:#0a1f3d;border-color:#1f4f99;color:#7fb2ff}
+.money{display:flex;align-items:center;gap:6px;background:#000;border:1px solid #3a3a3c;border-radius:10px;padding:0 10px}
+.money span{color:#8e8e93;font-size:20px}
+.money input{flex:1;background:transparent;border:0;color:#fff;font:600 22px system-ui;padding:10px 0;outline:none;min-width:0}
+.oc{color:#8e8e93;font-size:13px;margin-right:6px;font-weight:500}
+.cedit{margin-top:14px;background:#0a1f3d;border:1px solid #1f4f99;border-radius:14px;padding:12px;color:#dbe9ff;font-size:14px}.cedit b{display:block;color:#7fb2ff;margin-bottom:4px}.rbtn.ok{background:#0f3d1e;border-color:#1f6b36;color:#5be37f}
 .rform{margin-top:14px;background:#1c1c1e;border-radius:14px;padding:12px}
 .rform .lbl{color:#8e8e93;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
 .rform textarea{width:100%;box-sizing:border-box;background:#000;border:1px solid #3a3a3c;border-radius:10px;color:#fff;font:15px system-ui;padding:10px;margin-top:8px;resize:none}
@@ -194,13 +200,14 @@ function recalc(d){const lines=(d.rehab&&d.rehab.lines)||[];const before=Number(
   const o=d.offer||{},arv=Number((d.arv||{}).value)||0;if(o.originalMin===undefined){o.originalMin=o.min;o.originalMax=o.max;o.originalRehab=before;if(o.holdMax!=null)o.originalHoldMax=o.holdMax;}
   if(arv&&typeof o.max==="number"&&typeof o.min==="number"){const ask=Number(o.asking||(d.subject||{}).asking)||0;let max=Math.round(.72*arv-total-10000);if(ask)max=Math.min(max,ask-10000);let min=Math.round(.67*arv-total-10000);min=Math.min(min,max-10000);o.max=max;o.min=min;}
   if(typeof o.originalHoldMax==="number")o.holdMax=Math.round(o.originalHoldMax+(Number(o.originalRehab)-total));d.offer=o;return d;}
-async function editLine(l,action,reason){
+async function editLine(l,action,reason,newCost){
   const api=window.__uwApi;if(!api.isOwner()){api.toast("Only Irwin can change the repair budget");return;}
   const idx=(U.rehab.lines||[]).indexOf(l);const snap=JSON.stringify(U);
-  if(action==="remove")l.removed={by:api.me(),at:"now",reason};else delete l.removed;
-  recalc(U);api.haptic("ok");api.toast(action==="remove"?`Removed – rehab now ${$$(U.rehab.total)}`:`Restored – rehab now ${$$(U.rehab.total)}`);
+  if(action==="remove")l.removed={by:api.me(),at:"now",reason};else if(action==="restore")delete l.removed;
+  else{const from=Number(l.cost)||0;if(l.originalCost===undefined)l.originalCost=from;l.cost=Math.round(Number(newCost));l.costEdit={by:api.me(),at:"now",reason,from};}
+  recalc(U);api.haptic("ok");api.toast((action==="remove"?"Removed":action==="restore"?"Restored":"Cost updated")+` – rehab now ${$$(U.rehab.total)}`);
   pagerPaint();refreshNumbers();
-  try{const r=await api.run("editRepair",curRec.id,idx,l.item,action,reason||"");if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");curRec.data=r.data;U=r.data;refreshNumbers();}
+  try{const r=await api.run("editRepair",curRec.id,idx,l.item,action,reason||"",action==="cost"?Number(newCost):null);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");curRec.data=r.data;U=r.data;refreshNumbers();}
   catch(e){const d=JSON.parse(snap);curRec.data=d;U=d;api.haptic("err");api.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can change the repair budget":"Couldn't save – try again");pagerClose();refreshNumbers();}
 }
 const QUICK=["Already updated","Working condition","Rental-ready as is","Comps don't have it","Tenant/seller handles it","Covered by another line"];
@@ -213,13 +220,27 @@ function removeBox(l){
   ta.addEventListener("input",()=>{save.disabled=!ta.value.trim();});
   const chips=E("div",{class:"qchips"},...QUICK.map(q=>E("button",{type:"button",onclick:()=>{ta.value=ta.value.trim()?ta.value.trim()+" – "+q:q;save.disabled=false;}},q)));
   const form=E("div",{class:"rform"},E("div",{class:"lbl",text:"Why don't we need this repair?"}),chips,ta,save,E("button",{class:"rcancel",type:"button",onclick:()=>form.replaceWith(open)},"Cancel"));
-  wrap.append(open);return wrap;
+  wrap.append(open);
+  /* edit cost */
+  const CQ=["Smaller scope than estimated","Partial repair only","Our contractor's price","Cheat sheet price is lower","Cheat sheet price is higher","Needs more work than estimated"];
+  const eb=E("button",{class:"rbtn edit",type:"button",onclick:()=>{eb.replaceWith(cf);setTimeout(()=>num.focus(),50);}},"Edit cost");
+  const num=E("input",{type:"text",inputmode:"numeric",placeholder:String(Number(l.cost)||0),"aria-label":"New cost"});
+  const cta=E("textarea",{rows:"2",placeholder:"Why is this the right cost? (the AI learns from this)"});
+  const csave=E("button",{class:"rbtn edit",type:"button",disabled:""},"Save new cost");
+  const val=()=>{const n=Number(String(num.value).replace(/[^0-9.]/g,""));return num.value.trim()!==""&&isFinite(n)?Math.round(n):null;};
+  const upd=()=>{const n=val();csave.disabled=!(n!=null&&n!==Number(l.cost)&&cta.value.trim());csave.textContent=n!=null?`Save ${$$(l.cost)} → ${n===0?"$0":$$(n)}`:"Save new cost";};
+  num.addEventListener("input",upd);cta.addEventListener("input",upd);
+  csave.addEventListener("click",()=>{const n=val();if(n!=null&&cta.value.trim())editLine(l,"cost",cta.value.trim(),n);});
+  const cchips=E("div",{class:"qchips"},...CQ.map(q=>E("button",{type:"button",onclick:()=>{cta.value=cta.value.trim()?cta.value.trim()+" – "+q:q;upd();}},q)));
+  const cf=E("div",{class:"rform"},E("div",{class:"lbl",text:"New cost"}),E("div",{class:"money"},E("span",{text:"$"}),num),E("div",{class:"lbl",style:"margin-top:12px",text:"Why?"}),cchips,cta,csave,E("button",{class:"rcancel",type:"button",onclick:()=>cf.replaceWith(eb)},"Cancel"));
+  const edited=l.costEdit?E("div",{class:"cedit"},E("b",{text:`Cost changed from ${$$(l.originalCost!=null?l.originalCost:l.costEdit.from)}`}),E("div",{text:l.costEdit.reason||""})):null;
+  return E("div",{},edited,eb,wrap);
 }
 function repairLines(){const lines=(U.rehab&&U.rehab.lines)||[];const order=[];const g={};lines.forEach(l=>{const a=l.area||"Other";if(!g[a]){g[a]=[];order.push(a);}g[a].push(l);});return order.flatMap(a=>g[a]);}
 function repairBody(l){return[
   l.photo?E("img",{class:"rbig",src:l.photo,referrerpolicy:"no-referrer",alt:l.item,onclick:()=>lightbox(l.photo,`${l.item} – ${l.photoNote||""}`)}):E("div",{class:"rbig noimg",text:"No photo for this line"}),
   l.photoNote?E("div",{class:"carn",text:"Look at: "+l.photoNote}):null,
-  E("div",{class:"rhead"},E("span",{text:l.area||""}),E("b",{text:$$(l.cost)})),
+  E("div",{class:"rhead"},E("span",{text:l.area||""}),E("span",{},(l.originalCost!=null&&Number(l.originalCost)!==Number(l.cost))?E("s",{class:"oc",text:$$(l.originalCost)}):null,E("b",{text:$$(l.cost)}))),
   E("div",{class:"ritem",text:l.item}),
   ptxt("Why it needs work",l.reason),ptxt("Priced from",l.source),removeBox(l)].filter(Boolean);}
 function repairSheet(l){const L=repairLines();openPager(L,Math.max(0,L.indexOf(l)),(x,i)=>`Repair ${i+1} · ${x.item}`,x=>repairBody(x));}
@@ -250,7 +271,7 @@ function paneRepairs(){
     p.append(E("div",{class:"grp"},E("span",{text:area}),E("span",{text:$$(ls.filter(x=>!x.removed).reduce((a,b)=>a+Number(b.cost||0),0))})));
     ls.forEach(l=>p.append(E("div",{class:"rl"+(l.removed?" removed":""),role:"button",tabindex:"0",onclick:()=>repairSheet(l)},
       l.photo?E("img",{src:l.photo,loading:"lazy",referrerpolicy:"no-referrer",alt:l.item}):E("div",{class:"noimg",text:"no photo"}),
-      E("div",{class:"ri"},E("div",{class:"rt"},E("span",{text:l.item}),E("b",{text:$$(l.cost)})),E("div",{class:"rr",text:l.removed?("Removed: "+(l.removed.reason||"")):(l.reason||"")}),(l.photoNote||l.source)?E("div",{class:"rs",text:[l.photoNote,l.source].filter(Boolean).join(" · ")}):null))));
+      E("div",{class:"ri"},E("div",{class:"rt"},E("span",{text:l.item}),E("span",{},(l.originalCost!=null&&Number(l.originalCost)!==Number(l.cost))?E("s",{class:"oc",text:$$(l.originalCost)}):null,E("b",{text:$$(l.cost)}))),E("div",{class:"rr",text:l.removed?("Removed: "+(l.removed.reason||"")):(l.reason||"")}),(l.photoNote||l.source)?E("div",{class:"rs",text:[l.photoNote,l.source].filter(Boolean).join(" · ")}):null))));
   });
   p.append(E("div",{class:"tot"},E("span",{text:"Rehab total"}),E("b",{text:$$(U.rehab&&U.rehab.total)})));
   const sk=(U.rehab&&U.rehab.skipped)||[];
