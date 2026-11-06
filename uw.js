@@ -21,10 +21,13 @@ const css=`
 .ofield input{flex:1;min-width:0;width:100%;background:transparent;border:0;outline:none;color:#e3b341;font:700 18px/1.2 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-variant-numeric:tabular-nums;padding:8px 0}
 .ofield:focus-within{border-color:#e3b341}
 .oreset{flex:none;background:none;border:0;color:#0a84ff;font-size:14px;padding:6px 0;cursor:pointer}
-.ohint{font-size:12px;color:#8e8e93;margin-top:-4px}
+.ohint{font-size:12px;color:#8e8e93;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hrow{display:flex;align-items:center;gap:8px;margin-top:-4px;min-width:0}
+.pvtog{flex:none;background:none;border:0;color:#0a84ff;font-size:12px;font-weight:600;padding:2px 0;cursor:pointer}
 .ohint.warn{color:#ff9f0a}
 .opvl{font-size:12px;color:#8e8e93;margin-top:2px}
-.opv{background:#0b3d2a;color:#e5e5ea;border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.35;white-space:pre-wrap}
+.opv{background:#0b3d2a;color:#e5e5ea;border-radius:14px;padding:8px 12px;font-size:13px;line-height:1.35;white-space:pre-wrap;max-height:28vh;overflow-y:auto}
+.opv[hidden]{display:none}
 .uwk{flex:none;background:#1c1c1e;border-radius:12px;padding:8px 12px;min-width:86px}
 .uwk span{display:block;font-size:11px;color:#8e8e93;text-transform:uppercase;letter-spacing:.4px}
 .uwk b{font-size:17px;font-variant-numeric:tabular-nums}
@@ -356,15 +359,19 @@ function dock(rec){
   window.__uwOpenHint=()=>{const v=openVal(),mn=(U.offer||{}).min,mx=(U.offer||{}).max;hint.className="ohint";const pvx=window.__uwPv;if(pvx&&U.offerTemplate)pvx.textContent=v?String(U.offerTemplate).split("{AMOUNT}").join($$(v)):"No offer will be sent";
     if(!v){hint.textContent=(typeof mn==="number"&&mn<=0)?"MIN is below zero – type an offer, or approve with no offer":"No offer will be drafted";hint.classList.add("warn");}
     else if(typeof mx==="number"&&v>mx){hint.textContent=`Above MAX (${$$(mx)})`;hint.classList.add("warn");}
-    else if(typeof mn==="number"&&v===mn&&!openEdited){hint.textContent=(U.offerTemplate&&U.contact)?"MIN offer – approving texts it right away":"MIN offer – the bot drafts the text, you approve it before it sends";}
-    else{hint.textContent=(U.offerTemplate&&U.contact)?"Your number – approving texts it right away":"Your number – the bot drafts the text, you approve it before it sends";}};
+    else if(typeof mn==="number"&&v===mn&&!openEdited){hint.textContent=(U.offerTemplate&&U.contact)?"MIN · texts "+(U.contact&&(U.contact.firstName||U.contact.name)||"the realtor")+" when you approve":"MIN offer – the bot drafts the text, you approve it before it sends";}
+    else{hint.textContent=(U.offerTemplate&&U.contact)?"Your number · texts "+(U.contact&&(U.contact.firstName||U.contact.name)||"the realtor")+" when you approve":"Your number – the bot drafts the text, you approve it before it sends";}};
   window.__uwSyncOpen=syncOpen;
   function syncOpen(){if(openEdited)return;const mn=(U.offer||{}).min;oi.value=(typeof mn==="number"&&mn>0)?Math.round(mn).toLocaleString("en-US"):"";reset.hidden=true;window.__uwOpenHint();}
   openEdited=false;
-  d.append(E("div",{class:"orow"},E("label",{for:"uwOpen",text:"Opening offer"}),E("div",{class:"ofield"},E("span",{text:"$"}),oi),reset),hint);
   const canText=!!(U.offerTemplate&&U.contact&&U.contact.contactId);
-  const pv=E("div",{class:"opv"});window.__uwPv=canText?pv:null;
-  if(canText)d.append(E("div",{class:"opvl",text:`Text to ${U.contact.name||U.contact.firstName||"the realtor"} – sends the moment you approve`}),pv);
+  /* compact dock (Irwin, Nov 6): the text preview is collapsed so the dock never covers the underwriting */
+  const pv=E("div",{class:"opv",hidden:""});window.__uwPv=canText?pv:null;
+  const who=canText?(U.contact.name||U.contact.firstName||"the realtor"):"";
+  const tog=E("button",{type:"button",class:"pvtog",onclick:()=>{pv.hidden=!pv.hidden;tog.textContent=pv.hidden?"Preview text ▸":"Hide text ▾";}},"Preview text ▸");
+  if(canText)tog.setAttribute("aria-label",`Preview the text to ${who}`);
+  d.append(E("div",{class:"orow"},E("label",{for:"uwOpen",text:"Opening offer"}),E("div",{class:"ofield"},E("span",{text:"$"}),oi),reset),E("div",{class:"hrow"},hint,...(canText?[tog]:[])));
+  if(canText)d.append(pv);
   syncOpen();
   let armed=false;const ab=E("button",{class:"act approve",type:"button",style:"flex:1",onclick:async()=>{
     if(!api.isOwner()){api.toast("Only Irwin approves underwriting");return;}
