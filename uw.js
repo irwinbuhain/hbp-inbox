@@ -156,11 +156,12 @@ async function drawMap(){
   try{await loadLeaflet();}catch(e){$("uwMap").textContent="Map couldn't load";return;}
   const s=U.subject||{};if(map){map.remove();map=null;}
   map=L.map("uwMap",{zoomControl:false,attributionControl:true,tap:true});
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19,subdomains:"abcd",attribution:'© OpenStreetMap © CARTO'}).addTo(map);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,attribution:"Esri, HERE, OpenStreetMap"}).addTo(map);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:16}).addTo(map);
   const pts=[];
   if(s.lat&&s.lng){pts.push([s.lat,s.lng]);L.marker([s.lat,s.lng],{icon:L.divIcon({className:"uwpin s",html:"★",iconSize:[30,30]}),zIndexOffset:1000}).addTo(map).on("click",subjectSheet);}
   (U.comps||[]).forEach(c=>{if(c.lat&&c.lng){pts.push([c.lat,c.lng]);L.marker([c.lat,c.lng],{icon:L.divIcon({className:"uwpin",html:String(c.n),iconSize:[24,24]})}).addTo(map).on("click",()=>compSheet(c));}});
-  if(pts.length>1)map.fitBounds(pts,{padding:[30,30],maxZoom:16});else if(pts.length)map.setView(pts[0],15);
+  if(pts.length>1)map.fitBounds(pts,{padding:[30,30],maxZoom:15});else if(pts.length)map.setView(pts[0],15);
   setTimeout(()=>map&&map.invalidateSize(),450);
 }
 
