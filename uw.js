@@ -46,6 +46,15 @@ const css=`
 .cmap{height:190px;border-radius:14px;overflow:hidden;margin-top:12px;background:#111}
 .backcomp{display:block;width:100%;background:#1c1c1e;border:1px solid #3a3a3c;color:#0a84ff;border-radius:12px;padding:10px;font:600 14px system-ui;margin:0 0 12px}
 .sb .backcomp:last-child{margin:16px 0 0}
+.rl.removed{opacity:.5}.rl.removed .rt span,.rl.removed .rt b{text-decoration:line-through}.rl.removed .rr{color:#ff9f8a}
+.rbtn{display:block;width:100%;margin-top:14px;background:#2c1a17;border:1px solid #5a2a24;color:#ff6961;border-radius:12px;padding:12px;font:600 15px system-ui}
+.rbtn:disabled{opacity:.45}.rbtn.ok{background:#0f3d1e;border-color:#1f6b36;color:#5be37f}
+.rform{margin-top:14px;background:#1c1c1e;border-radius:14px;padding:12px}
+.rform .lbl{color:#8e8e93;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
+.rform textarea{width:100%;box-sizing:border-box;background:#000;border:1px solid #3a3a3c;border-radius:10px;color:#fff;font:15px system-ui;padding:10px;margin-top:8px;resize:none}
+.qchips{display:flex;flex-wrap:wrap;gap:6px}.qchips button{background:#2c2c2e;border:0;color:#e5e5ea;border-radius:999px;padding:6px 10px;font:13px system-ui}
+.rcancel{display:block;margin:10px auto 0;background:none;border:0;color:#8e8e93;font:14px system-ui}
+.rmd{margin-top:14px;background:#2c1a17;border:1px solid #5a2a24;border-radius:14px;padding:12px;color:#ffd7d2;font-size:14px}.rmd b{display:block;color:#ff6961;margin-bottom:4px}
 .pnav{display:flex;align-items:center;justify-content:space-between;margin:18px 0 6px;color:#8e8e93;font-size:13px}
 .pnav button{background:#1c1c1e;border:1px solid #3a3a3c;color:#0a84ff;border-radius:999px;padding:8px 14px;font:600 14px system-ui}
 .pnav button:disabled{color:#48484a}
@@ -137,7 +146,7 @@ function revealUnder(title,body,onDown,onUp){
 function closeSheet(){if(cmap){try{cmap.remove();}catch(e){}cmap=null;}if(!sheet)return;const s=sheet;sheet=null;s.classList.remove("on");setTimeout(()=>s.remove(),420);}
 
 /* pager: one item per page in a sheet; swipe left/right (or the arrows) to move between items */
-let pagerCur=()=>null;
+let pagerCur=()=>null,pagerPaint=()=>{},pagerClose=()=>{};
 function openPager(items,idx,titleOf,bodyOf,onDown){
   let i=idx;pagerCur=()=>items[i];const sb=()=>sheet&&sheet.querySelector(".sb");
   const nav=()=>E("div",{class:"pnav"},E("button",{type:"button",disabled:i<=0?"":null,onclick:()=>go(-1)},"‹ Prev"),E("span",{text:`${i+1} of ${items.length}`}),E("button",{type:"button",disabled:i>=items.length-1?"":null,onclick:()=>go(1)},"Next ›"));
@@ -146,6 +155,7 @@ function openPager(items,idx,titleOf,bodyOf,onDown){
     b.style.transition="transform .18s ease-in,opacity .18s";b.style.transform=`translateX(${d>0?-60:60}px)`;b.style.opacity="0";
     setTimeout(()=>{i=j;paint();b.style.transition="none";b.style.transform=`translateX(${d>0?60:-60}px)`;void b.offsetWidth;b.style.transition="transform .3s cubic-bezier(.32,.72,0,1),opacity .25s";b.style.transform="";b.style.opacity="";},170);
     window.__uwHaptic&&window.__uwHaptic();return true;}
+  pagerPaint=paint;pagerClose=closeSheet;
   openSheet(titleOf(items[i],i),[...bodyOf(items[i],i),nav()],onDown);
   const sh=sheet,b=sb();let x0=null,y0=null,t0=0,mode=null,dx=0;
   b.addEventListener("touchstart",e=>{if(e.touches.length!==1)return;const t=e.target;const car=t.closest&&t.closest(".car");if(car&&car.children.length>1){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now();mode=null;dx=0;},{passive:true});
@@ -180,13 +190,38 @@ function compBody(c){return[
 function compSheet(c){const L=U.comps||[];openPager(L,Math.max(0,L.indexOf(c)),x=>`Comp ${x.n} · ${String(x.address||"").split(",")[0]}`,x=>compBody(x),()=>{const s=U.subject||{},cur=pagerCur();revealUnder("Subject · "+String(s.address||"").split(",")[0],[E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n} · swipe up`),...subjectBody(),E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n}`)],null,()=>backToComp(cur));});}
 function backToComp(c){const L=U.comps||[];const under=sheet;openPager(L,Math.max(0,L.indexOf(c)),x=>`Comp ${x.n} · ${String(x.address||"").split(",")[0]}`,x=>compBody(x),compSheetDown);}
 function compSheetDown(){const s=U.subject||{},cur=pagerCur();revealUnder("Subject · "+String(s.address||"").split(",")[0],[E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n} · swipe up`),...subjectBody(),E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n}`)],null,()=>backToComp(cur));}
+function recalc(d){const lines=(d.rehab&&d.rehab.lines)||[];const before=Number((d.rehab||{}).total)||0;const total=lines.filter(l=>!l.removed).reduce((a,l)=>a+(Number(l.cost)||0),0);d.rehab.total=total;
+  const o=d.offer||{},arv=Number((d.arv||{}).value)||0;if(o.originalMin===undefined){o.originalMin=o.min;o.originalMax=o.max;o.originalRehab=before;if(o.holdMax!=null)o.originalHoldMax=o.holdMax;}
+  if(arv&&typeof o.max==="number"&&typeof o.min==="number"){const ask=Number(o.asking||(d.subject||{}).asking)||0;let max=Math.round(.72*arv-total-10000);if(ask)max=Math.min(max,ask-10000);let min=Math.round(.67*arv-total-10000);min=Math.min(min,max-10000);o.max=max;o.min=min;}
+  if(typeof o.originalHoldMax==="number")o.holdMax=Math.round(o.originalHoldMax+(Number(o.originalRehab)-total));d.offer=o;return d;}
+async function editLine(l,action,reason){
+  const api=window.__uwApi;if(!api.isOwner()){api.toast("Only Irwin can change the repair budget");return;}
+  const idx=(U.rehab.lines||[]).indexOf(l);const snap=JSON.stringify(U);
+  if(action==="remove")l.removed={by:api.me(),at:"now",reason};else delete l.removed;
+  recalc(U);api.haptic("ok");api.toast(action==="remove"?`Removed – rehab now ${$$(U.rehab.total)}`:`Restored – rehab now ${$$(U.rehab.total)}`);
+  pagerPaint();refreshNumbers();
+  try{const r=await api.run("editRepair",curRec.id,idx,l.item,action,reason||"");if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");curRec.data=r.data;U=r.data;refreshNumbers();}
+  catch(e){const d=JSON.parse(snap);curRec.data=d;U=d;api.haptic("err");api.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can change the repair budget":"Couldn't save – try again");pagerClose();refreshNumbers();}
+}
+const QUICK=["Already updated","Working condition","Rental-ready as is","Comps don't have it","Tenant/seller handles it","Covered by another line"];
+function removeBox(l){
+  if(!window.__uwApi.isOwner())return null;
+  if(l.removed)return E("div",{class:"rmd"},E("b",{text:"Removed from the budget"}),E("div",{text:l.removed.reason||""}),E("button",{class:"rbtn ok",type:"button",onclick:()=>editLine(l,"restore","")},"Restore this repair"));
+  const wrap=E("div",{});const open=E("button",{class:"rbtn",type:"button",onclick:()=>{open.replaceWith(form);setTimeout(()=>ta.focus(),50);}},"Remove from budget");
+  const ta=E("textarea",{rows:"2",placeholder:"Why don't we need this? (the AI learns from this)"});
+  const save=E("button",{class:"rbtn",type:"button",disabled:"",onclick:()=>{const v=ta.value.trim();if(v)editLine(l,"remove",v);}},`Remove ${$$(l.cost)}`);
+  ta.addEventListener("input",()=>{save.disabled=!ta.value.trim();});
+  const chips=E("div",{class:"qchips"},...QUICK.map(q=>E("button",{type:"button",onclick:()=>{ta.value=ta.value.trim()?ta.value.trim()+" – "+q:q;save.disabled=false;}},q)));
+  const form=E("div",{class:"rform"},E("div",{class:"lbl",text:"Why don't we need this repair?"}),chips,ta,save,E("button",{class:"rcancel",type:"button",onclick:()=>form.replaceWith(open)},"Cancel"));
+  wrap.append(open);return wrap;
+}
 function repairLines(){const lines=(U.rehab&&U.rehab.lines)||[];const order=[];const g={};lines.forEach(l=>{const a=l.area||"Other";if(!g[a]){g[a]=[];order.push(a);}g[a].push(l);});return order.flatMap(a=>g[a]);}
 function repairBody(l){return[
   l.photo?E("img",{class:"rbig",src:l.photo,referrerpolicy:"no-referrer",alt:l.item,onclick:()=>lightbox(l.photo,`${l.item} – ${l.photoNote||""}`)}):E("div",{class:"rbig noimg",text:"No photo for this line"}),
   l.photoNote?E("div",{class:"carn",text:"Look at: "+l.photoNote}):null,
   E("div",{class:"rhead"},E("span",{text:l.area||""}),E("b",{text:$$(l.cost)})),
   E("div",{class:"ritem",text:l.item}),
-  ptxt("Why it needs work",l.reason),ptxt("Priced from",l.source)].filter(Boolean);}
+  ptxt("Why it needs work",l.reason),ptxt("Priced from",l.source),removeBox(l)].filter(Boolean);}
 function repairSheet(l){const L=repairLines();openPager(L,Math.max(0,L.indexOf(l)),(x,i)=>`Repair ${i+1} · ${x.item}`,x=>repairBody(x));}
 function subjectBody(){const s=U.subject||{};return[carousel(s.photos,s.address),subjectDetails()];}
 function subjectSheet(){const s=U.subject||{};openSheet("Subject · "+String(s.address||"").split(",")[0],subjectBody());}
@@ -212,10 +247,10 @@ function paneRepairs(){
   const p=E("div",{class:"uwpane"});const lines=(U.rehab&&U.rehab.lines)||[];const groups={};
   lines.forEach(l=>{(groups[l.area||"Other"]=groups[l.area||"Other"]||[]).push(l);});
   Object.entries(groups).forEach(([area,ls])=>{
-    p.append(E("div",{class:"grp"},E("span",{text:area}),E("span",{text:$$(ls.reduce((a,b)=>a+Number(b.cost||0),0))})));
-    ls.forEach(l=>p.append(E("div",{class:"rl",role:"button",tabindex:"0",onclick:()=>repairSheet(l)},
+    p.append(E("div",{class:"grp"},E("span",{text:area}),E("span",{text:$$(ls.filter(x=>!x.removed).reduce((a,b)=>a+Number(b.cost||0),0))})));
+    ls.forEach(l=>p.append(E("div",{class:"rl"+(l.removed?" removed":""),role:"button",tabindex:"0",onclick:()=>repairSheet(l)},
       l.photo?E("img",{src:l.photo,loading:"lazy",referrerpolicy:"no-referrer",alt:l.item}):E("div",{class:"noimg",text:"no photo"}),
-      E("div",{class:"ri"},E("div",{class:"rt"},E("span",{text:l.item}),E("b",{text:$$(l.cost)})),E("div",{class:"rr",text:l.reason||""}),(l.photoNote||l.source)?E("div",{class:"rs",text:[l.photoNote,l.source].filter(Boolean).join(" · ")}):null))));
+      E("div",{class:"ri"},E("div",{class:"rt"},E("span",{text:l.item}),E("b",{text:$$(l.cost)})),E("div",{class:"rr",text:l.removed?("Removed: "+(l.removed.reason||"")):(l.reason||"")}),(l.photoNote||l.source)?E("div",{class:"rs",text:[l.photoNote,l.source].filter(Boolean).join(" · ")}):null))));
   });
   p.append(E("div",{class:"tot"},E("span",{text:"Rehab total"}),E("b",{text:$$(U.rehab&&U.rehab.total)})));
   const sk=(U.rehab&&U.rehab.skipped)||[];
@@ -243,7 +278,7 @@ async function drawMap(){
 
 let hoods=null,hoodLayer=null;
 const inRing=(pt,ring)=>{let c=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const[yi,xi]=ring[i],[yj,xj]=ring[j];if(((yi>pt[0])!=(yj>pt[0]))&&(pt[1]<(xj-xi)*(pt[0]-yi)/(yj-yi)+xi))c=!c;}return c;};
-function hoodAt(lat,lng){if(!hoods||!lat)return null;return hoods.find(h=>h.r.some(r=>inRing([lat,lng],r)))||null;}
+function hoodAt(lat,lng){if(!Array.isArray(hoods)||!lat)return null;return hoods.find(h=>h.r.some(r=>inRing([lat,lng],r)))||null;}
 async function drawHoods(){
   try{
     if(!hoods){try{const c=JSON.parse(localStorage.getItem("hbp-hoods")||"null");if(c&&Date.now()-c.t<6*3600e3)hoods=c.d;}catch(e){}}
@@ -257,15 +292,20 @@ async function drawHoods(){
     if(tab==="comps")renderPane();
   }catch(e){}
 }
-function render(rec){
+function sumEl(){return E("div",{class:"uwsum",id:"uwSum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)})),(U.offer&&U.offer.holdMax!=null)?E("div",{class:"uwk"+negc(U.offer.holdMax)},E("span",{text:"Hold max"}),E("b",{text:k(U.offer.holdMax)})):null,E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)})));}
+function noteEl(){return E("div",{id:"uwNote"},(Number(U.offer&&U.offer.max)<0)?E("div",{class:"uwnote",text:"MAX is below $0 – the numbers don't work at this rehab. See Subject › Offer formula."}):null);}
+function refreshNumbers(){const a=$("uwSum");if(a){const sl=a.scrollLeft;const n=sumEl();a.replaceWith(n);n.scrollLeft=sl;}const b=$("uwNote");if(b)b.replaceWith(noteEl());
+  const gk=$("uwGrade"),h=hoodAt((U.subject||{}).lat,(U.subject||{}).lng);if(gk&&h){gk.querySelector("b").textContent=h.g||"–";gk.style.borderColor=h.c;}if(tab==="repairs")renderPane();}
+let curRec=null;
+function render(rec){curRec=rec;
   U=rec.data;const s=U.subject||{},st=rec.status||"Draft";
   const stCls=/approv/i.test(st)?"uwst ok":/change/i.test(st)?"uwst chg":"uwst";
   view.replaceChildren(
     E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:s.address||"Underwriting"}),E("span",{text:[s.type,`${s.beds??"–"}bd/${s.baths??"–"}ba`,U.confidence?U.confidence+" confidence":""].filter(Boolean).join(" · ")})),E("span",{class:stCls,text:st})),
     E("div",{class:"uwbody"},
       E("div",{id:"uwMap"}),
-      E("div",{class:"uwsum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)})),(U.offer&&U.offer.holdMax!=null)?E("div",{class:"uwk"+negc(U.offer.holdMax)},E("span",{text:"Hold max"}),E("b",{text:k(U.offer.holdMax)})):null,E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)}))),
-      (Number(U.offer&&U.offer.max)<0)?E("div",{class:"uwnote",text:"MAX is below $0 – the numbers don't work at this rehab. See Subject › Offer formula."}):null,
+      sumEl(),
+      noteEl(),
       E("div",{class:"uwtabs",id:"uwTabs"},E("div",{class:"seg"},...[["subject","Subject"],["comps",`Comps (${(U.comps||[]).length})`],["repairs","Repairs"]].map(([t,l])=>E("button",{type:"button","data-t":t,"aria-pressed":"false",onclick:()=>{tab=t;renderPane();window.__uwHaptic&&window.__uwHaptic();}},l)))),
       E("div",{id:"uwPane"})),
     dock(rec));
