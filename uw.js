@@ -14,6 +14,15 @@ const css=`
 .uwbody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 #uwMap{height:36vh;min-height:220px;background:#111}
 .uwsum{display:flex;gap:8px;overflow-x:auto;padding:12px 16px 4px;scrollbar-width:none}.uwsum::-webkit-scrollbar{display:none}
+.orow{display:flex;align-items:center;gap:10px;min-width:0}
+.orow label{font-size:13px;color:#8e8e93;font-weight:600;flex:none}
+.ofield{flex:1;min-width:0;display:flex;align-items:center;gap:4px;border:1px solid #3a3a3c;border-radius:12px;background:#000;padding:0 12px;min-height:40px}
+.ofield span{color:#e3b341;font-weight:700;font-size:18px}
+.ofield input{flex:1;min-width:0;width:100%;background:transparent;border:0;outline:none;color:#e3b341;font:700 18px/1.2 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-variant-numeric:tabular-nums;padding:8px 0}
+.ofield:focus-within{border-color:#e3b341}
+.oreset{flex:none;background:none;border:0;color:#0a84ff;font-size:14px;padding:6px 0;cursor:pointer}
+.ohint{font-size:12px;color:#8e8e93;margin-top:-4px}
+.ohint.warn{color:#ff9f0a}
 .uwk{flex:none;background:#1c1c1e;border-radius:12px;padding:8px 12px;min-width:86px}
 .uwk span{display:block;font-size:11px;color:#8e8e93;text-transform:uppercase;letter-spacing:.4px}
 .uwk b{font-size:17px;font-variant-numeric:tabular-nums}
@@ -315,9 +324,10 @@ async function drawHoods(){
 }
 function sumEl(){return E("div",{class:"uwsum",id:"uwSum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)})),(U.offer&&U.offer.holdMax!=null)?E("div",{class:"uwk"+negc(U.offer.holdMax)},E("span",{text:"Hold max"}),E("b",{text:k(U.offer.holdMax)})):null,E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)})));}
 function noteEl(){return E("div",{id:"uwNote"},(Number(U.offer&&U.offer.max)<0)?E("div",{class:"uwnote",text:"MAX is below $0 – the numbers don't work at this rehab. See Subject › Offer formula."}):null);}
-function refreshNumbers(){const a=$("uwSum");if(a){const sl=a.scrollLeft;const n=sumEl();a.replaceWith(n);n.scrollLeft=sl;}const b=$("uwNote");if(b)b.replaceWith(noteEl());
+function refreshNumbers(){window.__uwSyncOpen&&window.__uwSyncOpen();const a=$("uwSum");if(a){const sl=a.scrollLeft;const n=sumEl();a.replaceWith(n);n.scrollLeft=sl;}const b=$("uwNote");if(b)b.replaceWith(noteEl());
   const gk=$("uwGrade"),h=hoodAt((U.subject||{}).lat,(U.subject||{}).lng);if(gk&&h){gk.querySelector("b").textContent=h.g||"–";gk.style.borderColor=h.c;}if(tab==="repairs")renderPane();}
-let curRec=null;
+let curRec=null,openEdited=false;
+let openEl=null;function openVal(){const el=openEl||document.getElementById("uwOpen");const n=el?Number(el.value.replace(/[^0-9]/g,"")):0;return n>0?n:0;}
 function render(rec){curRec=rec;
   U=rec.data;const s=U.subject||{},st=rec.status||"Draft";
   const stCls=/approv/i.test(st)?"uwst ok":/change/i.test(st)?"uwst chg":"uwst";
@@ -334,12 +344,32 @@ function render(rec){curRec=rec;
 }
 function dock(rec){
   const d=E("div",{class:"uwdock"});const api=window.__uwApi;
-  if(/approv/i.test(rec.status||"")){d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Approved by ${rec.decidedBy||""} · ${rec.decidedAt||""}`}));return d;}
+  if(/approv/i.test(rec.status||"")){const m=/OPENING_OFFER:\s*(\d+)/.exec(rec.note||"");const ov=rec.openingOffer||(m?Number(m[1]):0);
+    d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Approved by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(ov?` · opening offer ${$$(ov)} – drafting, you'll approve the text`:/OPENING_OFFER:\s*none/.test(rec.note||"")?" · no offer":"")}));return d;}
+  /* Opening offer: always starts at MIN (Irwin, Nov 6); editable before approving */
+  const oi=E("input",{type:"text",inputmode:"numeric",autocomplete:"off","aria-label":"Opening offer",id:"uwOpen",size:"1"});openEl=oi;
+  const reset=E("button",{type:"button",class:"oreset",hidden:"",onclick:()=>{openEdited=false;syncOpen();oi.focus();}},"Use MIN");
+  oi.addEventListener("input",()=>{const n=oi.value.replace(/[^0-9]/g,"");oi.value=n?Number(n).toLocaleString("en-US"):"";openEdited=true;reset.hidden=false;window.__uwOpenHint&&window.__uwOpenHint();});
+  const hint=E("div",{class:"ohint",id:"uwOpenHint"});
+  window.__uwOpenHint=()=>{const v=openVal(),mn=(U.offer||{}).min,mx=(U.offer||{}).max;hint.className="ohint";
+    if(!v){hint.textContent=(typeof mn==="number"&&mn<=0)?"MIN is below zero – type an offer, or approve with no offer":"No offer will be drafted";hint.classList.add("warn");}
+    else if(typeof mx==="number"&&v>mx){hint.textContent=`Above MAX (${$$(mx)})`;hint.classList.add("warn");}
+    else if(typeof mn==="number"&&v===mn&&!openEdited){hint.textContent="MIN offer – the bot drafts the text, you approve it before it sends";}
+    else{hint.textContent="Your number – the bot drafts the text, you approve it before it sends";}};
+  window.__uwSyncOpen=syncOpen;
+  function syncOpen(){if(openEdited)return;const mn=(U.offer||{}).min;oi.value=(typeof mn==="number"&&mn>0)?Math.round(mn).toLocaleString("en-US"):"";reset.hidden=true;window.__uwOpenHint();}
+  openEdited=false;
+  d.append(E("div",{class:"orow"},E("label",{for:"uwOpen",text:"Opening offer"}),E("div",{class:"ofield"},E("span",{text:"$"}),oi),reset),hint);
+  syncOpen();
   let armed=false;const ab=E("button",{class:"act approve",type:"button",style:"flex:1",onclick:async()=>{
     if(!api.isOwner()){api.toast("Only Irwin approves underwriting");return;}
-    if(!armed){armed=true;ab.textContent="Tap to confirm";ab.classList.add("confirm");setTimeout(()=>{armed=false;ab.textContent="Approve underwriting";ab.classList.remove("confirm");},4000);return;}
-    await decide(rec,"Approve","");}},"Approve underwriting");
-  if(!api.isOwner()){ab.disabled=true;ab.textContent="Irwin approves underwriting";}
+    const v=openVal();
+    if(!armed){armed=true;ab.textContent=v?`Tap to confirm · open at ${$$(v)}`:"Tap to confirm · no offer";ab.classList.add("confirm");setTimeout(()=>{armed=false;ab.textContent="Approve underwriting";ab.classList.remove("confirm");},4000);return;}
+    const mn=(U.offer||{}).min;
+    const note=v?`OPENING_OFFER: ${v}\nOpening offer ${$$(v)}${(typeof mn==="number"&&v!==Math.round(mn))?` (edited by Irwin – MIN was ${$$(mn)})`:" (MIN)"}`:"OPENING_OFFER: none\nApproved with no opening offer";
+    rec.openingOffer=v||0;
+    await decide(rec,"Approve",note);}},"Approve underwriting");
+  if(!api.isOwner()){ab.disabled=true;ab.textContent="Irwin approves underwriting";oi.disabled=true;}
   d.append(E("div",{class:"acts"},ab));
   const ta=E("textarea",{rows:"1",placeholder:"Change underwriting…","aria-label":"Change underwriting"});
   const send=E("button",{class:"send",type:"button","aria-label":"Send change",disabled:""});
