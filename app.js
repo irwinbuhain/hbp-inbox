@@ -42,9 +42,17 @@ async function load(manual){
   catch(e){S.error=e;}
   if(S.view==="thread"&&S.cur&&!S.rows.find(r=>r.id===S.cur)){closeThread();return;}
   renderList();
+  prefetchDetails();
   if(S.view==="thread"&&S.cur&&!(document.activeElement&&document.activeElement.tagName==="TEXTAREA")){const r=S.rows.find(x=>x.id===S.cur);const sig=JSON.stringify(r);if(sig!==S.curSig){renderThread();}}
 }
 
+/* warm the underwriting + report screens in the background so they open instantly */
+let pfT=0;function prefetchDetails(){clearTimeout(pfT);pfT=setTimeout(()=>{
+  const uw=(S.uw||[]).slice().sort((a,b)=>(/approv/i.test(a.status)-/approv/i.test(b.status))||String(b.created||"").localeCompare(String(a.created||""))).map(u=>u.id);
+  const rp=(S.reports||[]).map(r=>r.id);
+  if(window.__uw&&window.__uw.prefetch)window.__uw.prefetch(uw).then(()=>window.__rp&&window.__rp.prefetch&&window.__rp.prefetch(rp));
+  else if(window.__rp&&window.__rp.prefetch)window.__rp.prefetch(rp);
+  if(!window.__uw||!window.__rp)prefetchDetails();},window.__uw&&window.__rp?400:800);}
 function scope(){const w=S.who||(S.isOwner?"irwin":"dandy");return S.rows.filter(r=>forMatch(r,w)&&(S.bot==="all"||r.bot===S.bot));}
 function openQueue(){return scope().filter(r=>r.status==="Open").sort((a,b)=>(isOffer(b)-isOffer(a))||sortKey(a.created).localeCompare(sortKey(b.created)));}
 function navQueue(){const s=scope();const open=openQueue();const fyi=s.filter(r=>r.status==="FYI").sort((a,b)=>sortKey(b.created).localeCompare(sortKey(a.created)));const dec=s.filter(r=>r.status==="Decided").sort((a,b)=>sortKey(b.decidedAt).localeCompare(sortKey(a.decidedAt)));return open.concat(fyi,dec);}
@@ -244,16 +252,23 @@ async function decide(r,decision,note){
     ptr.style.height="0px";setTimeout(()=>{if(!busy)paint(0);},350);ready=false;},{passive:true});
 })();
 
-/* inbox page: swipe right to go back to Telegram */
+/* inbox page: swipe left/right between Tasks and Reports; swipe right on Tasks (the left end) goes back to Telegram */
 (function(){
   const lv=$("listView");let x0=null,y0=null,t0=0,mode=null,dx=0;
-  lv.addEventListener("touchstart",e=>{if(S.view!=="list"||e.touches.length!==1){x0=null;return;}const t=e.target;if(t.closest&&t.closest(".chips,.seg")){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now();mode=null;dx=0;},{passive:true});
+  const body=()=>$("list");
+  lv.addEventListener("touchstart",e=>{if(S.view!=="list"||e.touches.length!==1){x0=null;return;}const t=e.target;if(t.closest&&t.closest(".chips")){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now();mode=null;dx=0;},{passive:true});
   lv.addEventListener("touchmove",e=>{if(x0===null)return;dx=e.touches[0].clientX-x0;const dy=e.touches[0].clientY-y0;
-    if(!mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;mode=(dx>0&&Math.abs(dx)>Math.abs(dy)*1.3)?"exit":"none";}
-    if(mode==="exit"){lv.classList.add("drag");lv.style.transform=`translateX(${Math.max(0,dx)}px)`;}},{passive:true});
-  lv.addEventListener("touchend",()=>{if(x0===null)return;x0=null;if(mode!=="exit")return;
-    const go=dx>lv.clientWidth*0.3||(Date.now()-t0<300&&dx>60);lv.classList.remove("drag");
-    if(go){lv.style.transform="translateX(100%)";haptic();setTimeout(()=>{try{TG.close();}catch(e){}lv.style.transform="";},260);}else lv.style.transform="";mode=null;},{passive:true});
+    if(!mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;if(Math.abs(dx)>Math.abs(dy)*1.3){const rep=S.mode==="reports";mode=dx>0?(rep?"toTasks":"exit"):(rep?"none":"toReports");}else mode="none";}
+    if(mode==="exit"){lv.classList.add("drag");lv.style.transform=`translateX(${Math.max(0,dx)}px)`;}
+    else if(mode==="toReports"||mode==="toTasks"){const b=body();if(b){b.style.transition="none";b.style.transform=`translateX(${dx*0.85}px)`;b.style.opacity=String(1-Math.min(Math.abs(dx)/(lv.clientWidth*1.2),.6));}}},{passive:true});
+  lv.addEventListener("touchend",()=>{if(x0===null)return;x0=null;const m=mode;mode=null;const fast=Date.now()-t0<300;
+    if(m==="exit"){const go=dx>lv.clientWidth*0.3||(fast&&dx>60);lv.classList.remove("drag");
+      if(go){lv.style.transform="translateX(100%)";haptic();setTimeout(()=>{try{TG.close();}catch(e){}lv.style.transform="";},260);}else lv.style.transform="";return;}
+    if(m==="toReports"||m==="toTasks"){const b=body();const go=Math.abs(dx)>70||(fast&&Math.abs(dx)>35);
+      if(b){b.style.transition="";b.style.transform="";b.style.opacity="";}
+      if(go){S.mode=m==="toReports"?"reports":"tasks";haptic();render();const nb=body();if(nb){nb.classList.remove("slide-l","slide-r");void nb.offsetWidth;nb.classList.add(m==="toReports"?"slide-l":"slide-r");}}
+      else if(b){b.style.transition="transform .3s cubic-bezier(.32,.72,0,1), opacity .3s";requestAnimationFrame(()=>{b.style.transform="";b.style.opacity="";});}}
+  },{passive:true});
 })();
 
 /* gestures: drag left/right between tasks (follows your finger), swipe from the left edge to go back */

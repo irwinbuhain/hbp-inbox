@@ -38,7 +38,7 @@ function kpiTile(k){const n=Number(k.value),a=Number(k.avg7);let cmp=null;
   if(isFinite(n)&&isFinite(a)&&k.avg7!==""&&k.avg7!=null){const up=n>a,eq=n===a;const good=eq?null:(k.better==="down"?!up:up);cmp=E("span",{class:good==null?"":good?"up":"dn",text:eq?"= 7-day avg":(up?"▲ ":"▼ ")+"vs 7-day avg "+fmtNum(a,k.unit)});}
   return E("div",{class:"kt"},E("div",{class:"l",text:k.label}),E("div",{class:"v",text:fmtNum(k.value,k.unit)}),E("div",{class:"a"},cmp));}
 function stClass(s){return/done/i.test(s)?"done":/need/i.test(s)?"need":/declin/i.test(s)?"dec":"new";}
-function render(){
+function render(){if(R&&R.id)cput(R);
   const d=R.data||{},acts=R.actions||[];
   const body=E("div",{class:"rpb"});
   if((d.kpis||[]).length)body.append(E("div",{class:"kgrid"},...d.kpis.map(kpiTile)));
@@ -70,11 +70,31 @@ async function act(decision,text,note){
   try{const r=await A.run("reportAction",R.id,decision,text,note||"");if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");}
   catch(e){R.actions=JSON.parse(prev);A.haptic("err");A.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can do this":"Couldn't save – try again");render();}
 }
+/* cache: reports open instantly from memory/localStorage, then refresh in the background */
+const MEM={};
+function cget(id){if(MEM[id])return MEM[id];try{const v=JSON.parse(localStorage.getItem("hbp-rp:"+id)||"null");if(v){MEM[id]=v;return v;}}catch(e){}return null;}
+function cput(r){if(!r||!r.id)return;MEM[r.id]=r;try{localStorage.setItem("hbp-rp:"+r.id,JSON.stringify(r));const ks=Object.keys(localStorage).filter(k=>k.indexOf("hbp-rp:")===0);if(ks.length>12)ks.slice(0,ks.length-12).forEach(k=>localStorage.removeItem(k));}catch(e){}}
+let openId=null;
 async function open(id){
-  const A=api();view.replaceChildren(E("div",{class:"rh"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:"Loading report…"})),E("span")));
-  view.classList.add("on");A.backOn();
-  try{R=await A.run("getReport",id);if(!R)throw new Error("GONE");render();}catch(e){A.toast("Couldn't load the report");close();}
+  const A=api();openId=id;const c=cget(id);
+  view.classList.add("on");A.backOn();view.style.transform="";
+  if(c){R=c;render();}
+  else view.replaceChildren(E("div",{class:"rh"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:"Loading report…"})),E("span")));
+  try{const f=await A.run("getReport",id);if(!f)throw new Error("GONE");cput(f);
+    if(openId===id&&view.classList.contains("on")&&(!c||JSON.stringify(f)!==JSON.stringify(c))&&!(document.activeElement&&document.activeElement.tagName==="TEXTAREA"&&view.contains(document.activeElement))){R=f;render();}}
+  catch(e){if(!c){A.toast("Couldn't load the report");close();}}
 }
-function close(){view.classList.remove("on");api().backOff();}
-window.__rp={open,close,isOpen:()=>view.classList.contains("on")};
+function close(){openId=null;view.classList.remove("on");view.style.transform="";api().backOff();}
+let pf=false;
+async function prefetch(ids){if(pf)return;pf=true;try{for(const id of (ids||[]).slice(0,8)){if(MEM[id])continue;try{const f=await api().run("getReport",id);if(f)cput(f);}catch(e){}}}finally{pf=false;}}
+/* swipe right anywhere on a report → back to the reports list (follows your finger) */
+(function(){let x0=null,y0=null,t0=0,mode=null,dx=0;
+  view.addEventListener("touchstart",e=>{if(e.touches.length!==1){x0=null;return;}const t=e.target;if(t.closest&&t.closest("textarea,input")){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now();mode=null;dx=0;},{passive:true});
+  view.addEventListener("touchmove",e=>{if(x0===null)return;dx=e.touches[0].clientX-x0;const dy=e.touches[0].clientY-y0;
+    if(!mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;mode=(dx>0&&Math.abs(dx)>Math.abs(dy)*1.2)?"exit":"none";}
+    if(mode==="exit"){view.style.transition="none";view.style.transform=`translateX(${Math.max(0,dx)}px)`;}},{passive:true});
+  view.addEventListener("touchend",()=>{if(x0===null)return;x0=null;if(mode!=="exit"){mode=null;return;}mode=null;view.style.transition="";
+    if(dx>view.clientWidth*0.3||(Date.now()-t0<300&&dx>50)){api().haptic&&api().haptic();close();}else view.style.transform="";},{passive:true});
+})();
+window.__rp={open,close,prefetch,isOpen:()=>view.classList.contains("on")};
 })();

@@ -131,7 +131,7 @@ const lb=E("div",{class:"lightbox",onclick:()=>lb.classList.remove("on")});docum
 function lightbox(src,cap){lb.replaceChildren(E("img",{src,referrerpolicy:"no-referrer"}),cap?E("div",{class:"cap",text:cap}):null);lb.classList.add("on");}
 
 let U=null,tab="subject",map=null,sheet=null;
-function loadLeaflet(){if(window.L)return Promise.resolve();return new Promise((res,rej)=>{const l=document.createElement("link");l.rel="stylesheet";l.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";document.head.appendChild(l);const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+let lfP=null;function loadLeaflet(){if(window.L)return Promise.resolve();if(lfP)return lfP;return lfP=new Promise((res,rej)=>{const l=document.createElement("link");l.rel="stylesheet";l.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";document.head.appendChild(l);const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
 
 function carousel(photos,label){
   const wrap=E("div");const c=E("div",{class:"car"});const n=E("div",{class:"carn"});
@@ -328,7 +328,7 @@ function refreshNumbers(){window.__uwSyncOpen&&window.__uwSyncOpen();const a=$("
   const gk=$("uwGrade"),h=hoodAt((U.subject||{}).lat,(U.subject||{}).lng);if(gk&&h){gk.querySelector("b").textContent=h.g||"–";gk.style.borderColor=h.c;}if(tab==="repairs")renderPane();}
 let curRec=null,openEdited=false;
 let openEl=null;function openVal(){const el=openEl||document.getElementById("uwOpen");const n=el?Number(el.value.replace(/[^0-9]/g,"")):0;return n>0?n:0;}
-function render(rec){curRec=rec;
+function render(rec){curRec=rec;cput(rec);
   U=rec.data;const s=U.subject||{},st=rec.status||"Draft";
   const stCls=/approv/i.test(st)?"uwst ok":/change/i.test(st)?"uwst chg":"uwst";
   view.replaceChildren(
@@ -387,24 +387,37 @@ async function decide(rec,decision,note){
   catch(e){rec.status=prev;api.haptic("err");api.toast("Couldn't save – try again");render(rec);}
 }
 let opening=false;
+/* cache: underwritings open instantly from memory/localStorage, then refresh in the background */
+const MEM={};
+function cget(k){if(MEM[k])return MEM[k];try{const v=JSON.parse(localStorage.getItem("hbp-uw:"+k)||"null");if(v){MEM[k]=v;return v;}}catch(e){}return null;}
+function cput(rec,key){if(!rec||!rec.id)return;const keys=[rec.id].concat((rec.data&&rec.data.inboxIds)||[]);if(key)keys.push(key);keys.forEach(k=>MEM[k]=rec);
+  try{localStorage.setItem("hbp-uw:"+rec.id,JSON.stringify(rec));(((rec.data&&rec.data.inboxIds)||[]).concat(key&&key!==rec.id?[key]:[])).forEach(k=>localStorage.setItem("hbp-uw:"+k,JSON.stringify(rec)));
+    const ks=Object.keys(localStorage).filter(k=>k.indexOf("hbp-uw:")===0);if(ks.length>24)ks.slice(0,ks.length-24).forEach(k=>localStorage.removeItem(k));}catch(e){}}
+let openKey=null;
 async function open(key){
-  if(opening)return;opening=true;const api=window.__uwApi;
-  view.replaceChildren(E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:"Loading underwriting…"})),E("span")),E("div",{class:"uwbody"},E("div",{id:"uwMap"})));
-  view.classList.add("on");api.backOn(close);
-  try{const rec=await api.run("getUnderwriting",key);if(!rec)throw new Error("NOT_FOUND");tab="subject";render(rec);}
-  catch(e){api.toast("Couldn't load the underwriting");close();}
+  if(opening)return;opening=true;const api=window.__uwApi;openKey=key;const c=cget(key);
+  view.style.transform="";view.classList.add("on");api.backOn(close);
+  if(c){tab="subject";render(c);}
+  else view.replaceChildren(E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:"Loading underwriting…"})),E("span")),E("div",{class:"uwbody"},E("div",{id:"uwMap"})));
   opening=false;
+  try{const rec=await api.run("getUnderwriting",key);if(!rec)throw new Error("NOT_FOUND");cput(rec,key);
+    const busy=sheet||lb.classList.contains("on")||(document.activeElement&&/TEXTAREA|INPUT/.test(document.activeElement.tagName)&&view.contains(document.activeElement));
+    if(openKey===key&&view.classList.contains("on")&&!busy&&(!c||JSON.stringify(rec)!==JSON.stringify(c))){const t=tab;render(rec);if(t!==tab){tab=t;renderPane();}}}
+  catch(e){if(!c){api.toast("Couldn't load the underwriting");close();}}
 }
-function close(){if(lb.classList.contains("on")){lb.classList.remove("on");return;}if(sheet){closeSheet();return;}view.classList.remove("on");window.__uwApi.backOff();setTimeout(()=>{if(map){map.remove();map=null;}},450);}
+let pf=false;
+async function prefetch(keys){if(pf)return;pf=true;try{loadLeaflet().catch(()=>{});for(const k of (keys||[]).slice(0,8)){if(MEM[k])continue;try{const rec=await window.__uwApi.run("getUnderwriting",k);if(rec)cput(rec,k);}catch(e){}}}finally{pf=false;}}
+function close(){if(lb.classList.contains("on")){lb.classList.remove("on");return;}if(sheet){closeSheet();return;}openKey=null;view.classList.remove("on");view.style.transform="";window.__uwApi.backOff();setTimeout(()=>{if(map){map.remove();map=null;}},450);}
 const TABS=["subject","comps","repairs"];
 function goTab(dir){const i=TABS.indexOf(tab),j=i+dir;if(j<0||j>=TABS.length)return false;tab=TABS[j];const p=$("uwPane");renderPane();
   p.style.transition="none";p.style.transform=`translateX(${dir>0?40:-40}px)`;p.style.opacity=".3";void p.offsetWidth;p.style.transition="transform .3s cubic-bezier(.32,.72,0,1),opacity .25s";p.style.transform="";p.style.opacity="";
   const tb=$("uwTabs");if(tb){const b=view.querySelector(".uwbody");if(b.scrollTop>tb.offsetTop)b.scrollTop=tb.offsetTop;}window.__uwHaptic&&window.__uwHaptic();return true;}
-(function(){let x0=null,y0=null,t0=0,mode=null,dx=0;
-  view.addEventListener("touchstart",e=>{if(e.touches.length!==1||sheet){x0=null;return;}const t=e.target;if(t.closest&&t.closest("#uwMap,.car,.uwsum,.uwdock,textarea")){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now();mode=null;dx=0;},{passive:true});
-  view.addEventListener("touchmove",e=>{if(x0===null)return;dx=e.touches[0].clientX-x0;const dy=e.touches[0].clientY-y0;if(!mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;mode=Math.abs(dx)>Math.abs(dy)?"tab":"scroll";}
-    if(mode==="tab"){e.preventDefault();const p=$("uwPane");if(p){p.style.transition="none";p.style.transform=`translateX(${dx*0.6}px)`;}}},{passive:false});
-  view.addEventListener("touchend",()=>{if(x0===null)return;x0=null;if(mode!=="tab")return;const p=$("uwPane");const go=Math.abs(dx)>70||(Date.now()-t0<300&&Math.abs(dx)>35);
+(function(){let x0=null,y0=null,t0=0,mode=null,dx=0,edge=false;
+  view.addEventListener("touchstart",e=>{if(e.touches.length!==1||sheet||lb.classList.contains("on")){x0=null;return;}const t=e.target;const cx=e.touches[0].clientX;edge=cx<28;if(!edge&&t.closest&&t.closest("#uwMap,.car,.uwsum,.uwdock,textarea,input")){x0=null;return;}if(t.closest&&t.closest("textarea,input")){x0=null;return;}x0=cx;y0=e.touches[0].clientY;t0=Date.now();mode=null;dx=0;},{passive:true});
+  view.addEventListener("touchmove",e=>{if(x0===null)return;dx=e.touches[0].clientX-x0;const dy=e.touches[0].clientY-y0;if(!mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;if(Math.abs(dx)>Math.abs(dy))mode=(dx>0&&(edge||TABS.indexOf(tab)===0))?"exit":"tab";else mode="scroll";}
+    if(mode==="exit"){e.preventDefault();view.style.transition="none";view.style.transform=`translateX(${Math.max(0,dx)}px)`;}
+    else if(mode==="tab"){e.preventDefault();const p=$("uwPane");if(p){p.style.transition="none";p.style.transform=`translateX(${dx*0.6}px)`;}}},{passive:false});
+  view.addEventListener("touchend",()=>{if(x0===null)return;x0=null;if(mode==="exit"){mode=null;view.style.transition="";if(dx>view.clientWidth*0.3||(Date.now()-t0<300&&dx>50)){window.__uwApi.haptic&&window.__uwApi.haptic();close();}else view.style.transform="";return;}if(mode!=="tab")return;const p=$("uwPane");const go=Math.abs(dx)>70||(Date.now()-t0<300&&Math.abs(dx)>35);
     if(!(go&&goTab(dx<0?1:-1))&&p){p.style.transition="transform .3s cubic-bezier(.32,.72,0,1)";p.style.transform="";}mode=null;},{passive:true});
 })();
 function sheetSwipe(sh){let x0=null,y0=null,dy=0,t0=0,active=false;
@@ -418,5 +431,5 @@ function sheetSwipe(sh){let x0=null,y0=null,dy=0,t0=0,active=false;
     const was=active;active=false;
     if(was==="up"){sh.style.transform="";if(dy<-90||(Date.now()-t0<300&&dy<-45))sh._onUp();return;}
     if(dy>110||(Date.now()-t0<300&&dy>50)){if(sh._onDown)sh._onDown();else{sh.style.transform="";closeSheet();}}else sh.style.transform="";},{passive:true});}
-window.__uw={open,close,isOpen:()=>view.classList.contains("on")};
+window.__uw={open,close,prefetch,isOpen:()=>view.classList.contains("on")};
 })();
