@@ -40,7 +40,7 @@ const css=`
 .hcmp{display:flex;gap:8px}
 .hopt{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:8px 10px;color:#fff;cursor:pointer;text-align:left;font:inherit}
 .hopt span{font-size:12px;color:#8e8e93}.hopt b{font-size:15px;color:#e3b341;font-variant-numeric:tabular-nums}
-.hopt.on{border-color:#0a84ff;background:#0a84ff22}.hopt.on span{color:#0a84ff}
+.hopt i{font-style:normal;font-size:12px;color:#d1d1d6;margin-top:2px}.hopt.on{border-color:#0a84ff;background:#0a84ff22}.hopt.on span{color:#0a84ff}
 .hwhy{font-size:12px;color:#aeaeb2;margin-top:8px;line-height:1.35}
 .hdet{margin-top:8px}.hdet summary{font-size:13px;color:#0a84ff;cursor:pointer;padding:4px 0}
 .hbr{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-top:1px solid #2c2c2e}.hbr span{color:#aeaeb2}.hbr b{font-variant-numeric:tabular-nums;font-weight:600}.hbr.hnoi b{color:#e3b341}
@@ -248,7 +248,12 @@ function uwNums(d,reh){const o=d.offer||{},bot=String(d.bot||""),ask=Number(o.as
   if(h&&noi>0&&R){const kk=rule==="direct"?1:1.03;let max=Math.round((noi/R[0]-reh-10000)/kk);if(rule==="onMarket"&&ask)max=Math.min(max,ask-25000);let min=Math.round((noi/R[1]-reh-10000)/kk);min=Math.min(min,max-10000);hn={min,max};h.min=min;h.max=max;h.cocLow=R[0];h.cocHigh=R[1];o.holdMax=Math.round(noi/R[0]-reh);o.cashOnCashTarget=R[0];}
   o.use=(o.use==="hold"&&hn)?"hold":"flip";const p=o.use==="hold"?hn:o.flip;if(p){o.min=p.min;o.max=p.max;}d.offer=o;return o;}
 function hasHold(){const h=(U.offer||{}).hold;if(h&&Number(h.noi)>0&&typeof h.min!=="number"&&!U._hc){U._hc=1;uwNums(U,Number((U.rehab||{}).total)||0);}return !!(h&&typeof h.min==="number"&&typeof h.max==="number");}
-function setUse(x){if(!U.offer)return;U.offer.use=x;uwNums(U,Number((U.rehab||{}).total)||0);openEdited=false;refreshNumbers();const b=$("uwHold");if(b)b.replaceWith(holdEl());window.__uwStrat&&window.__uwStrat();}
+/* End buyer's returns at our MAX / MIN offer (Irwin, Nov 9): the buyer pays our price + 3% realtor commission (not on direct deals) + our $10K fee, then the rehab.
+   Fix & Flip → ROI = (ARV − all-in) ÷ all-in (before selling/holding costs). Buy & Hold → CoC = NOI ÷ all-in. */
+function uwAllIn(p){const o=U.offer||{},reh=Number((U.rehab||{}).total)||0;return p*(o.rule==="direct"?1:1.03)+10000+reh;}
+function uwRoi(p){const arv=Number((U.arv||{}).value)||0,a=uwAllIn(p);return (arv&&a>0)?(arv-a)/a:null;}
+function uwCoc(p){const noi=Number(((U.offer||{}).hold||{}).noi)||0,a=uwAllIn(p);return (noi&&a>0)?noi/a:null;}
+function setUse(x){if(!U.offer)return;U._pick=x;U.offer.use=x;uwNums(U,Number((U.rehab||{}).total)||0);openEdited=false;refreshNumbers();const b=$("uwHold");if(b)b.replaceWith(holdEl());window.__uwStrat&&window.__uwStrat();}
 function recalc(d){const lines=(d.rehab&&d.rehab.lines)||[];const before=Number((d.rehab||{}).total)||0;const total=lines.filter(l=>!l.removed).reduce((a,l)=>a+(Number(l.cost)||0),0);d.rehab.total=total;
   const o=d.offer||{},arv=Number((d.arv||{}).value)||0;if(o.originalMin===undefined){o.originalMin=o.min;o.originalMax=o.max;o.originalRehab=before;if(o.holdMax!=null)o.originalHoldMax=o.holdMax;}d.offer=o;
   if(arv&&typeof o.max==="number"&&typeof o.min==="number")uwNums(d,total);
@@ -366,16 +371,16 @@ async function drawHoods(){
     if(tab==="comps")renderPane();
   }catch(e){}
 }
-function sumEl(){return E("div",{class:"uwsum",id:"uwSum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:hasHold()?(U.offer.use==="hold"?"MIN · hold":"MIN · flip"):"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:hasHold()?(U.offer.use==="hold"?"MAX · hold":"MAX · flip"):"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)})),(U.offer&&U.offer.holdMax!=null)?E("div",{class:"uwk"+negc(U.offer.holdMax)},E("span",{text:"Hold max"}),E("b",{text:k(U.offer.holdMax)})):null,E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)})));}
+function sumEl(){return E("div",{class:"uwsum",id:"uwSum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),...((hasHold()&&!U._pick)?[]:[E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:hasHold()?(U._pick==="hold"?"MIN · hold":"MIN · flip"):"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:hasHold()?(U._pick==="hold"?"MAX · hold":"MAX · flip"):"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)}))]),E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)})));}
 function holdEl(){const o=U.offer||{},h=o.hold;if(!hasHold())return E("div",{id:"uwHold"});const pct=x=>(typeof x==="number")?(Math.round(x*1000)/10)+"%":"–",f=o.flip||{};
   const row=(a,b,c)=>E("div",{class:"hbr"+(c?" "+c:"")},E("span",{text:a}),E("b",{text:b}));
   const rents=(h.rents||[]).map(r=>row((r.unit?r.unit+" rent":"Rent")+(r.source?" ("+r.source+")":""),k(r.rent)+"/mo"));
-  return E("div",{id:"uwHold",class:"hbox"},E("div",{class:"hbt",text:"Fix & Flip vs Buy & Hold"}),
-    E("div",{class:"hcmp"},E("button",{type:"button",class:"hopt"+(o.use!=="hold"?" on":""),onclick:()=>setUse("flip")},E("span",{text:"Fix & Flip (ARV)"}),E("b",{text:k(f.min)+" – "+k(f.max)})),
-      E("button",{type:"button",class:"hopt"+(o.use==="hold"?" on":""),onclick:()=>setUse("hold")},E("span",{text:"Buy & Hold (CoC)"}),E("b",{text:k(h.min)+" – "+k(h.max)}))),
-    o.useReason?E("div",{class:"hwhy",text:"AI picked "+(o.use==="hold"?"Buy & Hold":"Fix & Flip")+": "+o.useReason}):null,
+  return E("div",{id:"uwHold",class:"hbox"},E("div",{class:"hbt",text:U._pick?"Fix & Flip vs Buy & Hold":"Fix & Flip vs Buy & Hold · tap one to use it"}),
+    E("div",{class:"hcmp"},E("button",{type:"button",class:"hopt"+(U._pick==="flip"?" on":""),onclick:()=>setUse("flip")},E("span",{text:"Fix & Flip (ARV)"}),E("b",{text:k(f.min)+" – "+k(f.max)}),E("i",{text:"ROI "+pct(uwRoi(f.max))+" at MAX · "+pct(uwRoi(f.min))+" at MIN"})),
+      E("button",{type:"button",class:"hopt"+(U._pick==="hold"?" on":""),onclick:()=>setUse("hold")},E("span",{text:"Buy & Hold (CoC)"}),E("b",{text:k(h.min)+" – "+k(h.max)}),E("i",{text:"CoC "+pct(uwCoc(h.max))+" at MAX · "+pct(uwCoc(h.min))+" at MIN"}))),
+    E("div",{class:"hwhy",text:"Returns are the end buyer's: our offer"+(o.rule==="direct"?"":" + 3% commission")+" + $10K fee + rehab. ROI is before selling and holding costs."}),
     E("details",{class:"hdet"},E("summary",{text:"Buy & Hold math"}),...rents,row("Gross rent / yr",k(h.grossRent)),row("Vacancy 5% · mgmt 10% · repairs 5%","−"+k((Number(h.vacancy)||0)+(Number(h.management)||0)+(Number(h.repairs)||0))),row("Insurance","−"+k(h.insurance)),row("Taxes"+(h.taxesSource?" ("+h.taxesSource+")":""),"−"+k(h.taxes)),row("NOI / yr",k(h.noi),"hnoi"),
-    row("CoC target (grade "+(((U.subject||{}).grade)||"?")+")",pct(h.cocLow)+" – "+pct(h.cocHigh)),row("Landlord's max price",k(o.holdMax)),h.cocAtAsking!=null?row("CoC at asking",pct(h.cocAtAsking)):null));}
+    row("CoC target (grade "+(((U.subject||{}).grade)||"?")+")",pct(h.cocLow)+" – "+pct(h.cocHigh)),h.cocAtAsking!=null?row("CoC at asking",pct(h.cocAtAsking)):null));}
 function noteEl(){return E("div",{id:"uwNote"},(Number(U.offer&&U.offer.max)<0)?E("div",{class:"uwnote",text:"MAX is below $0 – the numbers don't work at this rehab. See Subject › Offer formula."}):null);}
 function refreshNumbers(){window.__uwSyncOpen&&window.__uwSyncOpen();const a=$("uwSum");if(a){const sl=a.scrollLeft;const n=sumEl();a.replaceWith(n);n.scrollLeft=sl;}const b=$("uwNote");if(b)b.replaceWith(noteEl());const hb=$("uwHold");if(hb)hb.replaceWith(holdEl());
   const gk=$("uwGrade"),h=hoodAt((U.subject||{}).lat,(U.subject||{}).lng);if(gk&&h){gk.querySelector("b").textContent=h.g||"–";gk.style.borderColor=h.c;}if(tab==="repairs")renderPane();}
@@ -406,13 +411,13 @@ function dock(rec){
   const reset=E("button",{type:"button",class:"oreset",hidden:"",onclick:()=>{openEdited=false;syncOpen();oi.focus();}},"Use MIN");
   oi.addEventListener("input",()=>{const n=oi.value.replace(/[^0-9]/g,"");oi.value=n?Number(n).toLocaleString("en-US"):"";openEdited=true;reset.hidden=false;window.__uwOpenHint&&window.__uwOpenHint();});
   const hint=E("div",{class:"ohint",id:"uwOpenHint"});
-  window.__uwOpenHint=()=>{const v=openVal(),mn=(U.offer||{}).min,mx=(U.offer||{}).max;hint.className="ohint";const pvx=window.__uwPv;if(pvx&&U.offerTemplate)pvx.textContent=v?String(U.offerTemplate).split("{AMOUNT}").join($$(v)):"No offer will be sent";
+  window.__uwOpenHint=()=>{const v=openVal(),mn=(U.offer||{}).min,mx=(U.offer||{}).max;hint.className="ohint";if(hasHold()&&!U._pick){hint.textContent="Pick Fix & Flip or Buy & Hold above to set the offer";hint.classList.add("warn");return;}const pvx=window.__uwPv;if(pvx&&U.offerTemplate)pvx.textContent=v?String(U.offerTemplate).split("{AMOUNT}").join($$(v)):"No offer will be sent";
     if(!v){hint.textContent=(typeof mn==="number"&&mn<=0)?"MIN is below zero – type an offer, or approve with no offer":"No offer will be drafted";hint.classList.add("warn");}
     else if(typeof mx==="number"&&v>mx){hint.textContent=`Above MAX (${$$(mx)})`;hint.classList.add("warn");}
     else if(typeof mn==="number"&&v===mn&&!openEdited){hint.textContent=(U.offerTemplate&&U.contact)?"MIN · texts "+(U.contact&&(U.contact.firstName||U.contact.name)||"the realtor")+" when you approve":"MIN offer – the bot drafts the text, you approve it before it sends";}
     else{hint.textContent=(U.offerTemplate&&U.contact)?"Your number · texts "+(U.contact&&(U.contact.firstName||U.contact.name)||"the realtor")+" when you approve":"Your number – the bot drafts the text, you approve it before it sends";}};
   window.__uwSyncOpen=syncOpen;
-  function syncOpen(){if(openEdited)return;const mn=(U.offer||{}).min;oi.value=(typeof mn==="number"&&mn>0)?Math.round(mn).toLocaleString("en-US"):"";reset.hidden=true;window.__uwOpenHint();}
+  function syncOpen(){if(openEdited)return;const mn=(U.offer||{}).min,wait=hasHold()&&!U._pick;oi.disabled=wait||!window.__uwApi.isOwner();oi.placeholder=wait?"pick a strategy":"";oi.value=(!wait&&typeof mn==="number"&&mn>0)?Math.round(mn).toLocaleString("en-US"):"";reset.hidden=true;window.__uwOpenHint();}
   openEdited=false;
   const canText=!!(U.offerTemplate&&U.contact&&U.contact.contactId);
   /* compact dock (Irwin, Nov 6): the text preview is collapsed so the dock never covers the underwriting */
@@ -425,9 +430,10 @@ function dock(rec){
   syncOpen();
   let armed=false;const ab=E("button",{class:"act approve",type:"button",style:"flex:1",onclick:async()=>{
     if(!api.isOwner()){api.toast("Only Irwin approves underwriting");return;}
+    if(hasHold()&&!U._pick){api.toast("Pick Fix & Flip or Buy & Hold first");api.haptic&&api.haptic("err");const hb=$("uwHold");if(hb)hb.scrollIntoView({behavior:"smooth",block:"center"});return;}
     const v=openVal();
     if(!armed){armed=true;const tx=!!(U.offerTemplate&&U.contact&&U.contact.contactId);ab.textContent=v?(tx?`Tap to confirm · text ${$$(v)} now`:`Tap to confirm · open at ${$$(v)}`):"Tap to confirm · no offer";ab.classList.add("confirm");setTimeout(()=>{armed=false;ab.textContent=(U.offerTemplate&&U.contact)?"Approve & send offer":"Approve underwriting";ab.classList.remove("confirm");},4000);return;}
-    const mn=(U.offer||{}).min,stg=hasHold()?`\nSTRATEGY: ${U.offer.use==="hold"?"hold":"flip"}`:"";
+    const mn=(U.offer||{}).min,stg=hasHold()?`\nSTRATEGY: ${U._pick==="hold"?"hold":"flip"}`:"";
     const note=(v?`OPENING_OFFER: ${v}\nOpening offer ${$$(v)}${(typeof mn==="number"&&v!==Math.round(mn))?` (edited by Irwin – MIN was ${$$(mn)})`:" (MIN)"}`:"OPENING_OFFER: none\nApproved with no opening offer")+stg;
     rec.openingOffer=v||0;
     await decide(rec,"Approve",note);}},"Approve underwriting");
