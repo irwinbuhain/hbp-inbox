@@ -202,17 +202,34 @@ function renderThread(){
 }
 
 function quickChips(r){
-  const k=(r.kind||"").toLowerCase(),bot=r.bot||"",out=[],seen=new Set();
-  const add=(label,text)=>{const t=text||label;if(seen.has(t))return;seen.add(t);out.push({label,text:t});};
-  /* suggestions the bot itself quoted in "What's needed" */
-  ((r.action||"").match(/["“]([^"”]{8,240})["”]/g)||[]).forEach(q=>{const t=q.slice(1,-1).trim();if(/[a-z]{3}/i.test(t))add("“"+(t.length>34?t.slice(0,32)+"…":t)+"”",t);});
-  if(k==="offer"){add("Counter at $…","Counter at $");add("Hold – wait for their reply");add("Pass on this one – mark it dead");add("Ask for photos first");}
-  else if(k==="reply"){add("Change amount to $…","Change the amount to $");add("Make it shorter");add("Make it friendlier");add("Don't send – I'll call them");}
-  else if(k==="problem"){add("Counter at $…","Counter at $");add("Hold for now");add("Pass – mark it dead");add("Dandy will call them");}
-  else if(k==="call"){add("Called – booked it");add("Left a voicemail");add("No answer – try again tomorrow");add("Not interested – close it out");}
-  else if(k==="question"){add("Yes – go ahead");add("No – pass");if(/realtor|listing/i.test(bot)){add("Underwrite it");add("Ask for photos + address");}add("Dandy will call them");add("Remind me tomorrow");}
-  else if(k==="fyi"){add("Got it – no action");}
-  else{add("Yes – go ahead");add("No – pass");add("Remind me tomorrow");}
+  const k=(r.kind||"").toLowerCase(),out=[],seen=new Set();
+  const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+  const clean=s=>s.replace(/\s+/g," ").replace(/^[\s–—:;,.-]+|[\s–—:;,.?-]+$/g,"").trim();
+  const BTN=/^(approve|skip|done|change|note|mark done|change\/note)\b/i;
+  const add=(label,text,amt)=>{text=amt?String(text):clean(text||label);label=clean(label);if(!amt&&(!text||text.length<2||BTN.test(text)&&text.split(" ").length<3))return;const key=text.toLowerCase();if(seen.has(key))return;seen.add(key);out.push({label:label.length>40?label.slice(0,38)+"…":label,text,amt:!!amt});};
+  let a=String(r.action||"").replace(/\s*Or do you need anything else\?\s*$/i,"").trim();
+  if(!a||/^nothing (needed|to send)/i.test(a)&&!/"/.test(a))return [];
+  // 1) the bot's own quoted suggestions
+  { const re=/["“]([^"”]{3,300})["”]/g; let m; while((m=re.exec(a))){ const pre=a.slice(Math.max(0,m.index-30),m.index); if(/(reply|note me|note|e\.g\.|say|text|send|tell|write)\W*$/i.test(pre)) add("“"+m[1].trim()+"”",m[1].trim()); } }
+  // 2) Reply with: (1) … (2) … → one fill-in template
+  const rw=a.match(/reply with:?\s*(\(1\)[\s\S]*)/i);
+  if(rw){const items=rw[1].split(/\(\d\)\s*/).map(clean).filter(Boolean).map(x=>x.split(/ – | - |\? /)[0].replace(/\?$/,""));if(items.length>1){add("Answer all "+items.length,items.map((x,i)=>`(${i+1}) ${x}: `).join("\n"));}}
+  // 3) Pick one: (a) … (b) …
+  else{const opts=a.split(/\(([a-e]|\d)\)\s+/i);if(opts.length>3){for(let i=2;i<opts.length;i+=2){const t=clean(opts[i].split(/;|\. (?=[A-Z])/)[0]);add("Option ("+opts[i-1]+"): "+t,"Option ("+opts[i-1]+") – "+t);}}}
+  // 4) choices in parentheses: (counter, hold, or pass) / (pursue / underwrite …)
+  { const re=/\(([^()]{3,90})\)/g; let mm; while((mm=re.exec(a))){ const inner=mm[1], pre=a.slice(Math.max(0,mm.index-45),mm.index); if(!/,| \/ | or /.test(inner)||/=|\$|\d{3}/.test(inner))continue; if(!(/\?\s*$/.test(inner)||/(decide|choose|pick|next step|want|whether)[^.]*$/i.test(pre))||/\bwhy\b/i.test(pre))continue;
+    const parts=inner.replace(/\?$/,"").split(/\s*(?:,\s*or\s+|,\s*|\s+\/\s+|\s+or\s+)\s*/).map(clean).filter(x=>x&&x.split(" ").length<=6);
+    if(parts.length>=2&&parts.length<=5)parts.forEach(x=>/^counter\b/i.test(x)?add("Counter at $…","Counter at $",1):add(cap(x))); } }
+  // 5) a question with "or": "pursue without photos …, or drop it?"
+  a.split(/(?<=\?)/).forEach(s=>{if(!/\?$/.test(s.trim())||!/\bor\b/.test(s))return;const q=s.replace(/^.*?[–—:]\s*/,"").replace(/\?$/,"");if(q.length>140)return;const parts=q.split(/,?\s+or\s+/).map(clean).filter(Boolean);if(parts.length===2&&parts.every(x=>x.split(" ").length<=9))parts.forEach(x=>add(cap(x.replace(/\s*\(.*$/,""))));});
+  // 6) amounts / counters
+  { const mm=a.match(/confirm MIN\/MAX[^(]*\(note shows (\$[\d,]+) \/ (\$[\d,]+)\)/i); if(mm) add("MIN "+mm[1]+" / MAX "+mm[2]+" ✓","MIN "+mm[1]+" / MAX "+mm[2]+" confirmed"); }
+  if(/new amount|different amount|with an amount|what to counter|different split|counter,|\bcounter\b.*\?/i.test(a)||(k==="offer"&&/\bchange\b/i.test(a)))add(k==="offer"?"Make it $…":"Counter at $…",k==="offer"?"Make it $":"Counter at $",1);
+  if(/best and final \$[\d,]+|best & final \$[\d,]+/i.test(a)&&/go straight/i.test(a)){const m=a.match(/best (?:and|&) final (\$[\d,]+)/i);add("Go to best & final "+m[1],"Go straight to our best and final "+m[1]);}
+  // 7) which properties do we pursue → decision templates
+  if(/which (properties|ones)[^?]*pursue/i.test(a)){add("Pursue all of them");add("Pass on all of them");add("Pursue only: …","Pursue only: ",1);}
+  // 8) free-text reply wanted
+  if(/change with the (text|reply)|what should we (say|tell)|tell me (which|what|and)|or tell me\b|say what to change|change with the text you want/i.test(a))add(/say what to change/i.test(a)?"Change: …":"Reply: …",/say what to change/i.test(a)?"Change: ":"Reply: ",1);
   return out.slice(0,8);
 }
 function renderDock(r){
@@ -239,7 +256,7 @@ function renderDock(r){
   ta.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&!/Mobi|Android/i.test(navigator.userAgent)){e.preventDefault();send.click();}});
   send.addEventListener("click",()=>{const v=ta.value.trim();if(!v)return;decide(r,(r.status==="Open"&&(r.draft||offer))?"Change":"Note",v);});
   const qc=quickChips(r);
-  if(qc.length){const row=el("div",{class:"achips"});qc.forEach(c=>row.append(el("button",{class:"achip",type:"button",title:c.text,onclick:()=>{ta.value=c.text;ta.dispatchEvent(new Event("input"));if(/\$$/.test(c.text)){ta.focus();try{ta.setSelectionRange(ta.value.length,ta.value.length);}catch(e){}}}},c.label)));d.append(row);}
+  if(qc.length){const row=el("div",{class:"achips"});qc.forEach(c=>row.append(el("button",{class:"achip",type:"button",title:c.text,onclick:()=>{ta.value=c.text;ta.dispatchEvent(new Event("input"));if(c.amt){ta.focus();try{ta.setSelectionRange(ta.value.length,ta.value.length);}catch(e){}}}},c.label)));d.append(row);}
   d.append(el("div",{class:"comp"},el("div",{class:"field"},ta,send)));
   setTimeout(grow,0);
 }
