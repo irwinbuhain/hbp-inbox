@@ -63,12 +63,15 @@ function sugCard(s,a){
   c.append(note,E("div",{class:"bt"},E("button",{class:"ap",type:"button",onclick:()=>act("Approve",s.text,note.value)},"Approve"),E("button",{class:"sk",type:"button",onclick:()=>act("Skip",s.text,note.value)},"Skip")));
   return c;
 }
+const DONE=new Set();
 async function act(decision,text,note){
   const A=api();const prev=JSON.stringify(R.actions||[]);
   (R.actions=R.actions||[]).push({when:"now",kind:decision==="Instruction"?"Instruction":"Suggestion",text,note,by:A.me(),status:decision==="Skip"?"Declined":"New",result:""});
   A.haptic("ok");A.toast(decision==="Skip"?"Skipped":"Sent to Claude");render();
   const left=()=>{const d=(R.actions||[]).filter(a=>a.kind==="Suggestion").map(a=>a.text);return ((R.data&&R.data.suggestions)||[]).filter(x=>d.indexOf(x.text)<0).length;};
   A.patch&&A.patch("rp",R.id,{open:left()});
+  /* Irwin, Nov 9: once every suggestion in this report is decided, go to the next report that needs you */
+  const me=R.id;if(left()===0){DONE.add(me);setTimeout(()=>{if(openId!==me)return;const n=window.__rpNextOpen&&window.__rpNextOpen(me,DONE);if(n){A.toast("Next report");open(n);view.classList.remove("rp-l","rp-r");void view.offsetWidth;view.classList.add("rp-l");}else{A.toast("All reports reviewed");close();}},900);}
   try{const r=await A.run("reportAction",R.id,decision,text,note||"");if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");A.refresh&&A.refresh();}
   catch(e){R.actions=JSON.parse(prev);A.haptic("err");A.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can do this":"Couldn't save – try again");render();A.patch&&A.patch("rp",R.id,{open:left()});}
 }

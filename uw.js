@@ -178,8 +178,11 @@ function openPager(items,idx,titleOf,bodyOf,onDown){
   pagerPaint=paint;pagerClose=closeSheet;
   openSheet(titleOf(items[i],i),[...bodyOf(items[i],i),nav()],onDown);
   const sh=sheet,b=sb();let x0=null,y0=null,t0=0,mode=null,dx=0;
-  b.addEventListener("touchstart",e=>{if(e.touches.length!==1)return;const t=e.target;const car=t.closest&&t.closest(".car");if(car&&car.children.length>1){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now();mode=null;dx=0;},{passive:true});
-  b.addEventListener("touchmove",e=>{if(x0===null)return;dx=e.touches[0].clientX-x0;const dy=e.touches[0].clientY-y0;if(!mode){if(Math.abs(dx)<8&&Math.abs(dy)<8)return;mode=Math.abs(dx)>Math.abs(dy)?"page":"none";}
+  let car=null;
+  b.addEventListener("touchstart",e=>{if(e.touches.length!==1)return;const t=e.target;if(t.closest&&t.closest(".leaflet-container")){x0=null;return;}car=t.closest&&t.closest(".car");if(car&&car.children.length<2)car=null;x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now();mode=null;dx=0;},{passive:true});
+  b.addEventListener("touchmove",e=>{if(x0===null)return;dx=e.touches[0].clientX-x0;const dy=e.touches[0].clientY-y0;if(!mode){if(Math.abs(dx)<8&&Math.abs(dy)<8)return;mode=Math.abs(dx)>Math.abs(dy)?"page":"none";
+      /* on the photo strip: swipe the photos, and only page to the next comp once you're at the last (or first) photo */
+      if(mode==="page"&&car){const atEnd=car.scrollLeft+car.clientWidth>=car.scrollWidth-4,atStart=car.scrollLeft<=4;if(!((dx<0&&atEnd)||(dx>0&&atStart))){mode="none";x0=null;return;}}}
     if(mode==="page"){e.preventDefault();b.style.transition="none";b.style.transform=`translateX(${dx*0.7}px)`;}},{passive:false});
   b.addEventListener("touchend",()=>{if(x0===null)return;x0=null;if(mode!=="page")return;const ok=(Math.abs(dx)>70||(Date.now()-t0<300&&Math.abs(dx)>35))&&go(dx<0?1:-1);
     if(!ok){b.style.transition="transform .3s cubic-bezier(.32,.72,0,1)";b.style.transform="";}mode=null;},{passive:true});
@@ -396,8 +399,11 @@ async function decide(rec,decision,note){
   rec.status=decision==="Approve"?"Approved":"Change requested";rec.decidedBy=api.me();rec.decidedAt="now";
   api.haptic("ok");api.toast(decision==="Approve"?"Underwriting approved":"Sent to the bot");render(rec);
   api.patch&&api.patch("uw",rec.id,{status:rec.status,decidedBy:rec.decidedBy});
-  try{const r=await api.run("decideUnderwriting",rec.id,decision,note);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");if(r.offer){if(r.offer.sent){api.toast("Offer texted ✓");rec.status="Sent";api.patch&&api.patch("uw",rec.id,{status:"Sent"});render(rec);}else api.toast("Approved – offer not sent yet, check the inbox");}api.refresh&&api.refresh();}
-  catch(e){rec.status=prev;api.haptic("err");api.toast("Couldn't save – try again");render(rec);api.patch&&api.patch("uw",rec.id,{status:prev});}
+  const still=()=>curRec&&curRec.id===rec.id;
+  /* Irwin, Nov 9: after approving or changing, go straight to the next underwriting to review */
+  setTimeout(()=>{if(!still())return;const q=(window.__uwQueue&&window.__uwQueue())||[];const n=q.find(id=>id!==rec.id);if(sheet)closeSheet();if(n){api.toast("Next underwriting");open(n);}else{api.toast("All underwritings reviewed");close();}},900);
+  try{const r=await api.run("decideUnderwriting",rec.id,decision,note);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");if(r.offer){if(r.offer.sent){api.toast("Offer texted ✓");rec.status="Sent";api.patch&&api.patch("uw",rec.id,{status:"Sent"});cput(rec);if(still())render(rec);}else api.toast("Approved – offer not sent yet, check the inbox");}api.refresh&&api.refresh();}
+  catch(e){rec.status=prev;api.haptic("err");api.toast("Couldn't save – "+(decision==="Approve"?"underwriting not approved":"change not sent")+", try again");cput(rec);if(still())render(rec);api.patch&&api.patch("uw",rec.id,{status:prev});}
 }
 let opening=false;
 /* cache: underwritings open instantly from memory/localStorage, then refresh in the background */

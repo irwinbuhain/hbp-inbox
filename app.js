@@ -73,6 +73,7 @@ function renderReports(){
   if(!R.length){list.append(el("div",{class:"empty"},el("strong",{text:"No reports yet"}),"End-of-day and morning reports from each bot will show up here."));return;}
   const today=nowT().slice(0,10);const groups={};R.forEach(r=>{const d=(r.date||r.created||"").slice(0,10);(groups[d]=groups[d]||[]).push(r);});
   const ord=Object.keys(groups).sort().reverse().flatMap(d=>groups[d].map(r=>r.id));window.__rpOrder=()=>ord;
+  window.__rpNextOpen=(cur,skip)=>{const byId={};(S.reports||[]).forEach(r=>byId[r.id]=r);const i=ord.indexOf(cur);const after=ord.slice(i+1).concat(ord.slice(0,Math.max(0,i)));return after.find(id=>Number((byId[id]||{}).open)>0&&!(skip&&skip.has(id)))||null;};
   Object.keys(groups).sort().reverse().forEach(d=>{list.append(el("div",{class:"sect",text:d===today?"Today":d}));
     groups[d].forEach(r=>list.append(el("button",{class:"row",type:"button",onclick:()=>window.__rp&&window.__rp.open(r.id)},
       el("span",{class:"dot"},Number(r.open)>0?el("i"):null),
@@ -113,6 +114,7 @@ const UWC={approved:"#e3b341",sent:"#30d158",negotiating:"#ff9f0a",accepted:"#30
 function uwColor(st){const k=String(st||"Draft").toLowerCase().trim();return UWC[k]||(/declin|dead|pass/.test(k)?UWC.declined:/negot|counter/.test(k)?UWC.negotiating:/accept|contract/.test(k)?UWC.accepted:/sent/.test(k)?UWC.sent:/approv/.test(k)?UWC.approved:"#8e8e93");}
 function uwPost(st){return /approv|sent|negotiat|accept|declin/i.test(String(st||""));}
 window.__uwColor=uwColor;window.__uwPost=uwPost;
+window.__uwQueue=()=>(S.uw||[]).filter(u=>/^draft$/i.test(String(u.status||"Draft").trim()||"Draft")).sort((x,y)=>String(y.created||"").localeCompare(String(x.created||""))).map(u=>u.id);
 function kfmt(n){if(n===""||n==null)return"–";const x=Number(n);if(!isFinite(x))return"–";const a=Math.abs(x),t=a>=1000?"$"+(Math.round(a/100)/10)+"k":"$"+a;return x<0?"−"+t:t;}
 function uwRow(u){
   return el("button",{class:"row",type:"button",onclick:()=>window.__uw&&window.__uw.open(u.id)},
