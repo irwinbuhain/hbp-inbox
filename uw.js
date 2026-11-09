@@ -35,6 +35,18 @@ const css=`
 .uwk.neg b{color:#ff453a}
 .uwk.neg{box-shadow:inset 0 0 0 1px #5a2a24}
 .uwnote{margin:6px 16px 0;font-size:12px;color:#ff9f8a}
+.hbox{margin:10px 16px 0;background:#1c1c1e;border-radius:14px;padding:10px 12px}
+.hbt{font-size:12px;color:#8e8e93;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
+.hcmp{display:flex;gap:8px}
+.hopt{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:8px 10px;color:#fff;cursor:pointer;text-align:left;font:inherit}
+.hopt span{font-size:12px;color:#8e8e93}.hopt b{font-size:15px;color:#e3b341;font-variant-numeric:tabular-nums}
+.hopt.on{border-color:#0a84ff;background:#0a84ff22}.hopt.on span{color:#0a84ff}
+.hwhy{font-size:12px;color:#aeaeb2;margin-top:8px;line-height:1.35}
+.hdet{margin-top:8px}.hdet summary{font-size:13px;color:#0a84ff;cursor:pointer;padding:4px 0}
+.hbr{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-top:1px solid #2c2c2e}.hbr span{color:#aeaeb2}.hbr b{font-variant-numeric:tabular-nums;font-weight:600}.hbr.hnoi b{color:#e3b341}
+.act.passb{flex:none;color:#ff453a;padding:0 16px}.act.pass{color:#ff453a}.act.pass.confirm{background:#ff453a;border-color:#ff453a;color:#fff}
+.ppan{display:flex;flex-direction:column;gap:8px}
+.ppan[hidden]{display:none}
 .uwtabs{position:sticky;top:0;z-index:5;background:#000;padding:10px 16px 8px}
 .uwtabs .seg{display:flex;background:#1c1c1e;border-radius:9px;padding:2px;gap:2px}
 .uwtabs .seg button{flex:1;border:0;background:transparent;color:#fff;font-size:13px;font-weight:600;padding:8px 4px;border-radius:7px}
@@ -226,10 +238,21 @@ function compBody(c){return[
 function compSheet(c){const L=U.comps||[];openPager(L,Math.max(0,L.indexOf(c)),x=>`Comp ${x.n} · ${String(x.address||"").split(",")[0]}`,x=>compBody(x),()=>{const s=U.subject||{},cur=pagerCur();revealUnder("Subject · "+String(s.address||"").split(",")[0],[E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n} · swipe up`),...subjectBody(),E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n}`)],null,()=>backToComp(cur));});}
 function backToComp(c){const L=U.comps||[];const under=sheet;openPager(L,Math.max(0,L.indexOf(c)),x=>`Comp ${x.n} · ${String(x.address||"").split(",")[0]}`,x=>compBody(x),compSheetDown);}
 function compSheetDown(){const s=U.subject||{},cur=pagerCur();revealUnder("Subject · "+String(s.address||"").split(",")[0],[E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n} · swipe up`),...subjectBody(),E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n}`)],null,()=>backToComp(cur));}
+const UW_COC={A:[.05,.10],B:[.10,.15],C:[.15,.19],D:[.20,.25]};
+/* same math as the inbox server (Irwin, Nov 9): Fix & Flip from ARV – realtor 67/72%, direct 70/75%, on-market MAX ≤ asking − 25K; Buy & Hold = NOI ÷ CoC target (A 5–10%, B 10–15%, C 15–19%, D 20–25%) − rehab − $10K (÷1.03 with a realtor) */
+function uwNums(d,reh){const o=d.offer||{},bot=String(d.bot||""),ask=Number(o.asking||(d.subject||{}).asking)||0,arv=Number((d.arv||{}).value)||0;
+  const direct=o.rule==="direct"||/^aq$/i.test(bot.trim())||/direct[- ]to[- ]seller/i.test(String(o.formula||"")),onM=o.rule==="onMarket"||o.onMarket===true||/listing bot/i.test(bot),rule=onM?"onMarket":direct?"direct":"realtor";
+  if(arv){const lo=direct?.70:.67,hi=direct?.75:.72;let max=Math.round(hi*arv-reh-10000);if(onM&&ask)max=Math.min(max,ask-25000);let min=Math.round(lo*arv-reh-10000);min=Math.min(min,max-10000);o.flip={min,max};o.rule=rule;}
+  else if(!o.flip&&typeof o.min==="number")o.flip={min:o.min,max:o.max};
+  const h=o.hold,noi=Number(h&&h.noi),R=UW_COC[String((d.subject||{}).grade||"").trim().charAt(0).toUpperCase()];let hn=null;
+  if(h&&noi>0&&R){const kk=rule==="direct"?1:1.03;let max=Math.round((noi/R[0]-reh-10000)/kk);if(rule==="onMarket"&&ask)max=Math.min(max,ask-25000);let min=Math.round((noi/R[1]-reh-10000)/kk);min=Math.min(min,max-10000);hn={min,max};h.min=min;h.max=max;h.cocLow=R[0];h.cocHigh=R[1];o.holdMax=Math.round(noi/R[0]-reh);o.cashOnCashTarget=R[0];}
+  o.use=(o.use==="hold"&&hn)?"hold":"flip";const p=o.use==="hold"?hn:o.flip;if(p){o.min=p.min;o.max=p.max;}d.offer=o;return o;}
+function hasHold(){const h=(U.offer||{}).hold;if(h&&Number(h.noi)>0&&typeof h.min!=="number"&&!U._hc){U._hc=1;uwNums(U,Number((U.rehab||{}).total)||0);}return !!(h&&typeof h.min==="number"&&typeof h.max==="number");}
+function setUse(x){if(!U.offer)return;U.offer.use=x;uwNums(U,Number((U.rehab||{}).total)||0);openEdited=false;refreshNumbers();const b=$("uwHold");if(b)b.replaceWith(holdEl());window.__uwStrat&&window.__uwStrat();}
 function recalc(d){const lines=(d.rehab&&d.rehab.lines)||[];const before=Number((d.rehab||{}).total)||0;const total=lines.filter(l=>!l.removed).reduce((a,l)=>a+(Number(l.cost)||0),0);d.rehab.total=total;
-  const o=d.offer||{},arv=Number((d.arv||{}).value)||0;if(o.originalMin===undefined){o.originalMin=o.min;o.originalMax=o.max;o.originalRehab=before;if(o.holdMax!=null)o.originalHoldMax=o.holdMax;}
-  if(arv&&typeof o.max==="number"&&typeof o.min==="number"){const ask=Number(o.asking||(d.subject||{}).asking)||0;let max=Math.round(.72*arv-total-10000);if(ask)max=Math.min(max,ask-25000);let min=Math.round(.67*arv-total-10000);min=Math.min(min,max-10000);o.max=max;o.min=min;}
-  if(typeof o.originalHoldMax==="number")o.holdMax=Math.round(o.originalHoldMax+(Number(o.originalRehab)-total));d.offer=o;return d;}
+  const o=d.offer||{},arv=Number((d.arv||{}).value)||0;if(o.originalMin===undefined){o.originalMin=o.min;o.originalMax=o.max;o.originalRehab=before;if(o.holdMax!=null)o.originalHoldMax=o.holdMax;}d.offer=o;
+  if(arv&&typeof o.max==="number"&&typeof o.min==="number")uwNums(d,total);
+  if(!(o.hold&&Number(o.hold.noi)>0)&&typeof o.originalHoldMax==="number")o.holdMax=Math.round(o.originalHoldMax+(Number(o.originalRehab)-total));return d;}
 async function editLine(l,action,reason,newCost){
   const api=window.__uwApi;if(!api.isOwner()){api.toast("Only Irwin can change the repair budget");return;}
   const idx=(U.rehab.lines||[]).indexOf(l);const snap=JSON.stringify(U);
@@ -343,9 +366,18 @@ async function drawHoods(){
     if(tab==="comps")renderPane();
   }catch(e){}
 }
-function sumEl(){return E("div",{class:"uwsum",id:"uwSum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)})),(U.offer&&U.offer.holdMax!=null)?E("div",{class:"uwk"+negc(U.offer.holdMax)},E("span",{text:"Hold max"}),E("b",{text:k(U.offer.holdMax)})):null,E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)})));}
+function sumEl(){return E("div",{class:"uwsum",id:"uwSum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:hasHold()?(U.offer.use==="hold"?"MIN · hold":"MIN · flip"):"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:hasHold()?(U.offer.use==="hold"?"MAX · hold":"MAX · flip"):"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)})),(U.offer&&U.offer.holdMax!=null)?E("div",{class:"uwk"+negc(U.offer.holdMax)},E("span",{text:"Hold max"}),E("b",{text:k(U.offer.holdMax)})):null,E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)})));}
+function holdEl(){const o=U.offer||{},h=o.hold;if(!hasHold())return E("div",{id:"uwHold"});const pct=x=>(typeof x==="number")?(Math.round(x*1000)/10)+"%":"–",f=o.flip||{};
+  const row=(a,b,c)=>E("div",{class:"hbr"+(c?" "+c:"")},E("span",{text:a}),E("b",{text:b}));
+  const rents=(h.rents||[]).map(r=>row((r.unit?r.unit+" rent":"Rent")+(r.source?" ("+r.source+")":""),k(r.rent)+"/mo"));
+  return E("div",{id:"uwHold",class:"hbox"},E("div",{class:"hbt",text:"Fix & Flip vs Buy & Hold"}),
+    E("div",{class:"hcmp"},E("button",{type:"button",class:"hopt"+(o.use!=="hold"?" on":""),onclick:()=>setUse("flip")},E("span",{text:"Fix & Flip (ARV)"}),E("b",{text:k(f.min)+" – "+k(f.max)})),
+      E("button",{type:"button",class:"hopt"+(o.use==="hold"?" on":""),onclick:()=>setUse("hold")},E("span",{text:"Buy & Hold (CoC)"}),E("b",{text:k(h.min)+" – "+k(h.max)}))),
+    o.useReason?E("div",{class:"hwhy",text:"AI picked "+(o.use==="hold"?"Buy & Hold":"Fix & Flip")+": "+o.useReason}):null,
+    E("details",{class:"hdet"},E("summary",{text:"Buy & Hold math"}),...rents,row("Gross rent / yr",k(h.grossRent)),row("Vacancy 5% · mgmt 10% · repairs 5%","−"+k((Number(h.vacancy)||0)+(Number(h.management)||0)+(Number(h.repairs)||0))),row("Insurance","−"+k(h.insurance)),row("Taxes"+(h.taxesSource?" ("+h.taxesSource+")":""),"−"+k(h.taxes)),row("NOI / yr",k(h.noi),"hnoi"),
+    row("CoC target (grade "+(((U.subject||{}).grade)||"?")+")",pct(h.cocLow)+" – "+pct(h.cocHigh)),row("Landlord's max price",k(o.holdMax)),h.cocAtAsking!=null?row("CoC at asking",pct(h.cocAtAsking)):null));}
 function noteEl(){return E("div",{id:"uwNote"},(Number(U.offer&&U.offer.max)<0)?E("div",{class:"uwnote",text:"MAX is below $0 – the numbers don't work at this rehab. See Subject › Offer formula."}):null);}
-function refreshNumbers(){window.__uwSyncOpen&&window.__uwSyncOpen();const a=$("uwSum");if(a){const sl=a.scrollLeft;const n=sumEl();a.replaceWith(n);n.scrollLeft=sl;}const b=$("uwNote");if(b)b.replaceWith(noteEl());
+function refreshNumbers(){window.__uwSyncOpen&&window.__uwSyncOpen();const a=$("uwSum");if(a){const sl=a.scrollLeft;const n=sumEl();a.replaceWith(n);n.scrollLeft=sl;}const b=$("uwNote");if(b)b.replaceWith(noteEl());const hb=$("uwHold");if(hb)hb.replaceWith(holdEl());
   const gk=$("uwGrade"),h=hoodAt((U.subject||{}).lat,(U.subject||{}).lng);if(gk&&h){gk.querySelector("b").textContent=h.g||"–";gk.style.borderColor=h.c;}if(tab==="repairs")renderPane();}
 let curRec=null,openEdited=false;
 let openEl=null;function openVal(){const el=openEl||document.getElementById("uwOpen");const n=el?Number(el.value.replace(/[^0-9]/g,"")):0;return n>0?n:0;}
@@ -358,6 +390,7 @@ function render(rec){curRec=rec;cput(rec);
       E("div",{id:"uwMap"}),
       sumEl(),
       noteEl(),
+      holdEl(),
       E("div",{class:"uwtabs",id:"uwTabs"},E("div",{class:"seg"},...[["subject","Subject"],["comps",`Comps (${(U.comps||[]).length})`],["repairs","Repairs"]].map(([t,l])=>E("button",{type:"button","data-t":t,"aria-pressed":"false",onclick:()=>{tab=t;renderPane();window.__uwHaptic&&window.__uwHaptic();}},l)))),
       E("div",{id:"uwPane"})),
     dock(rec));
@@ -365,6 +398,7 @@ function render(rec){curRec=rec;cput(rec);
 }
 function dock(rec){
   const d=E("div",{class:"uwdock"});const api=window.__uwApi;
+  if(/^pass/i.test(rec.status||"")){const why=String(rec.note||"").replace(/^PASS:?\s*/i,"");d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Passed by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(why&&why!=="PASS"?` · ${why}`:"")}));return d;}
   if((window.__uwPost||(x=>/approv/i.test(x)))(rec.status||"")){const m=/OPENING_OFFER:\s*(\d+)/.exec(rec.note||"");const ov=rec.openingOffer||(m?Number(m[1]):0);
     d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Approved by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(ov?(/approv/i.test(rec.status||"")?` · opening offer ${$$(ov)} – drafting, you'll approve the text`:` · opening offer ${$$(ov)}`):/OPENING_OFFER:\s*none/.test(rec.note||"")?" · no offer":"")}));return d;}
   /* Opening offer: always starts at MIN (Irwin, Nov 6); editable before approving */
@@ -393,12 +427,19 @@ function dock(rec){
     if(!api.isOwner()){api.toast("Only Irwin approves underwriting");return;}
     const v=openVal();
     if(!armed){armed=true;const tx=!!(U.offerTemplate&&U.contact&&U.contact.contactId);ab.textContent=v?(tx?`Tap to confirm · text ${$$(v)} now`:`Tap to confirm · open at ${$$(v)}`):"Tap to confirm · no offer";ab.classList.add("confirm");setTimeout(()=>{armed=false;ab.textContent=(U.offerTemplate&&U.contact)?"Approve & send offer":"Approve underwriting";ab.classList.remove("confirm");},4000);return;}
-    const mn=(U.offer||{}).min;
-    const note=v?`OPENING_OFFER: ${v}\nOpening offer ${$$(v)}${(typeof mn==="number"&&v!==Math.round(mn))?` (edited by Irwin – MIN was ${$$(mn)})`:" (MIN)"}`:"OPENING_OFFER: none\nApproved with no opening offer";
+    const mn=(U.offer||{}).min,stg=hasHold()?`\nSTRATEGY: ${U.offer.use==="hold"?"hold":"flip"}`:"";
+    const note=(v?`OPENING_OFFER: ${v}\nOpening offer ${$$(v)}${(typeof mn==="number"&&v!==Math.round(mn))?` (edited by Irwin – MIN was ${$$(mn)})`:" (MIN)"}`:"OPENING_OFFER: none\nApproved with no opening offer")+stg;
     rec.openingOffer=v||0;
     await decide(rec,"Approve",note);}},"Approve underwriting");
   if(U.offerTemplate&&U.contact)ab.textContent="Approve & send offer";if(!api.isOwner()){ab.disabled=true;ab.textContent="Irwin approves underwriting";oi.disabled=true;}
-  d.append(E("div",{class:"acts"},ab));
+  /* Pass on the deal (Irwin, Nov 9): no offer, the bots mark it PASSED */
+  const pr=E("textarea",{rows:"1",placeholder:"Why pass? (optional – helps the AI learn)","aria-label":"Reason for passing"});
+  let parmed=false;const pc=E("button",{class:"act pass",type:"button",style:"flex:1",onclick:async()=>{if(!parmed){parmed=true;pc.textContent="Tap again to pass · no offer";pc.classList.add("confirm");setTimeout(()=>{parmed=false;pc.textContent="Pass on this deal";pc.classList.remove("confirm");},4000);return;}
+    const why=pr.value.trim();await decide(rec,"Pass","PASS"+(why?": "+why:""));}},"Pass on this deal");
+  const pp=E("div",{class:"ppan",hidden:""},E("div",{class:"field"},pr),E("div",{class:"acts"},pc));
+  const pb=E("button",{class:"act passb",type:"button",onclick:()=>{pp.hidden=!pp.hidden;if(!pp.hidden)pr.focus();}},"Pass");
+  if(!api.isOwner())pb.disabled=true;
+  d.append(E("div",{class:"acts"},ab,pb),pp);
   const ta=E("textarea",{rows:"1",placeholder:"Change underwriting…","aria-label":"Change underwriting"});
   const send=E("button",{class:"send",type:"button","aria-label":"Send change",disabled:""});
   send.innerHTML='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg>';
@@ -409,14 +450,14 @@ function dock(rec){
 }
 async function decide(rec,decision,note){
   const api=window.__uwApi;const prev=rec.status;
-  rec.status=decision==="Approve"?"Approved":"Change requested";rec.decidedBy=api.me();rec.decidedAt="now";
-  api.haptic("ok");api.toast(decision==="Approve"?"Underwriting approved":"Sent to the bot");render(rec);
+  rec.status=decision==="Approve"?"Approved":decision==="Pass"?"Passed":"Change requested";rec.decidedBy=api.me();rec.decidedAt="now";if(decision==="Pass")rec.note=note;
+  api.haptic("ok");api.toast(decision==="Approve"?"Underwriting approved":decision==="Pass"?"Passed – no offer":"Sent to the bot");render(rec);
   api.patch&&api.patch("uw",rec.id,{status:rec.status,decidedBy:rec.decidedBy});
   const still=()=>curRec&&curRec.id===rec.id;
   /* Irwin, Nov 9: after approving or changing, go straight to the next underwriting to review */
   setTimeout(()=>{if(!still())return;const q=(window.__uwQueue&&window.__uwQueue())||[];const n=q.find(id=>id!==rec.id);if(sheet)closeSheet();if(n){api.toast("Next underwriting");open(n);}else{api.toast("All underwritings reviewed");close();}},900);
   try{const r=await api.run("decideUnderwriting",rec.id,decision,note);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");if(r.offer){if(r.offer.sent){api.toast("Offer texted ✓");rec.status="Sent";api.patch&&api.patch("uw",rec.id,{status:"Sent"});cput(rec);if(still())render(rec);}else api.toast("Approved – offer not sent yet, check the inbox");}api.refresh&&api.refresh();}
-  catch(e){rec.status=prev;api.haptic("err");api.toast("Couldn't save – "+(decision==="Approve"?"underwriting not approved":"change not sent")+", try again");cput(rec);if(still())render(rec);api.patch&&api.patch("uw",rec.id,{status:prev});}
+  catch(e){rec.status=prev;api.haptic("err");api.toast("Couldn't save – "+(decision==="Approve"?"underwriting not approved":decision==="Pass"?"pass not saved":"change not sent")+", try again");cput(rec);if(still())render(rec);api.patch&&api.patch("uw",rec.id,{status:prev});}
 }
 let opening=false;
 /* cache: underwritings open instantly from memory/localStorage, then refresh in the background */

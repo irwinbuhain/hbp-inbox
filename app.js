@@ -110,9 +110,9 @@ function renderList(){
   if(uwDone.length){list.append(el("div",{class:"sect",text:"Approved underwriting · deals"}));uwDone.forEach(u=>list.append(uwRow(u)));}
 }
 /* underwriting deal stage → colour (Irwin: Approved yellow, Sent green, Negotiating orange, Accepted green, Declined red) */
-const UWC={approved:"#e3b341",sent:"#30d158",negotiating:"#ff9f0a",accepted:"#30d158",declined:"#ff453a","change requested":"#ff9f0a",draft:"#8e8e93"};
+const UWC={approved:"#e3b341",sent:"#30d158",negotiating:"#ff9f0a",accepted:"#30d158",declined:"#ff453a","change requested":"#ff9f0a",passed:"#8e8e93",draft:"#8e8e93"};
 function uwColor(st){const k=String(st||"Draft").toLowerCase().trim();return UWC[k]||(/declin|dead|pass/.test(k)?UWC.declined:/negot|counter/.test(k)?UWC.negotiating:/accept|contract/.test(k)?UWC.accepted:/sent/.test(k)?UWC.sent:/approv/.test(k)?UWC.approved:"#8e8e93");}
-function uwPost(st){return /approv|sent|negotiat|accept|declin/i.test(String(st||""));}
+function uwPost(st){return /approv|sent|negotiat|accept|declin|pass/i.test(String(st||""));}
 window.__uwColor=uwColor;window.__uwPost=uwPost;
 window.__uwQueue=()=>(S.uw||[]).filter(u=>/^draft$/i.test(String(u.status||"Draft").trim()||"Draft")).sort((x,y)=>String(y.created||"").localeCompare(String(x.created||""))).map(u=>u.id);
 function kfmt(n){if(n===""||n==null)return"–";const x=Number(n);if(!isFinite(x))return"–";const a=Math.abs(x),t=a>=1000?"$"+(Math.round(a/100)/10)+"k":"$"+a;return x<0?"−"+t:t;}
