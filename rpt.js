@@ -89,14 +89,22 @@ async function open(id){
 function close(){openId=null;view.classList.remove("on");view.style.transform="";api().backOff();}
 let pf=false;
 async function prefetch(ids){if(pf)return;pf=true;try{for(const id of (ids||[]).slice(0,8)){if(MEM[id])continue;try{const f=await api().run("getReport",id);if(f)cput(f);}catch(e){}}}finally{pf=false;}}
-/* swipe right anywhere on a report → back to the reports list (follows your finger) */
-(function(){let x0=null,y0=null,t0=0,mode=null,dx=0;
-  view.addEventListener("touchstart",e=>{if(e.touches.length!==1){x0=null;return;}const t=e.target;if(t.closest&&t.closest("textarea,input")){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now();mode=null;dx=0;},{passive:true});
+/* swipes (Irwin, Nov 9): left = next report, right = previous report; right on the first report – or from the left edge – goes back to the list */
+function nav(step){const ord=(window.__rpOrder&&window.__rpOrder())||[];const i=ord.indexOf(openId);if(i<0)return false;const j=i+step;if(j<0||j>=ord.length)return false;open(ord[j]);
+  view.classList.remove("rp-l","rp-r");void view.offsetWidth;view.classList.add(step>0?"rp-l":"rp-r");api().haptic&&api().haptic();return true;}
+(function(){let x0=null,y0=null,t0=0,mode=null,dx=0,edge=false;
+  const st=document.createElement("style");st.textContent="@keyframes rpl{from{transform:translateX(60px);opacity:.4}to{transform:none;opacity:1}}@keyframes rpr{from{transform:translateX(-60px);opacity:.4}to{transform:none;opacity:1}}#rpView.rp-l{animation:rpl .22s ease-out}#rpView.rp-r{animation:rpr .22s ease-out}";document.head.appendChild(st);
+  view.addEventListener("touchstart",e=>{if(e.touches.length!==1){x0=null;return;}const t=e.target;if(t.closest&&t.closest("textarea,input")){x0=null;return;}x0=e.touches[0].clientX;y0=e.touches[0].clientY;edge=x0<28;t0=Date.now();mode=null;dx=0;},{passive:true});
   view.addEventListener("touchmove",e=>{if(x0===null)return;dx=e.touches[0].clientX-x0;const dy=e.touches[0].clientY-y0;
-    if(!mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;mode=(dx>0&&Math.abs(dx)>Math.abs(dy)*1.2)?"exit":"none";}
-    if(mode==="exit"){view.style.transition="none";view.style.transform=`translateX(${Math.max(0,dx)}px)`;}},{passive:true});
-  view.addEventListener("touchend",()=>{if(x0===null)return;x0=null;if(mode!=="exit"){mode=null;return;}mode=null;view.style.transition="";
-    if(dx>view.clientWidth*0.3||(Date.now()-t0<300&&dx>50)){api().haptic&&api().haptic();close();}else view.style.transform="";},{passive:true});
+    if(!mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;mode=Math.abs(dx)>Math.abs(dy)*1.2?(edge&&dx>0?"exit":"page"):"none";}
+    if(mode==="exit"){view.style.transition="none";view.style.transform=`translateX(${Math.max(0,dx)}px)`;}
+    else if(mode==="page"){view.style.transition="none";view.style.transform=`translateX(${dx*0.35}px)`;}},{passive:true});
+  view.addEventListener("touchend",()=>{if(x0===null)return;x0=null;const m=mode;mode=null;if(m!=="exit"&&m!=="page")return;view.style.transition="";
+    const far=Math.abs(dx)>view.clientWidth*0.22||(Date.now()-t0<300&&Math.abs(dx)>50);
+    if(m==="exit"){if(far&&dx>0){api().haptic&&api().haptic();close();}else view.style.transform="";return;}
+    view.style.transform="";if(!far)return;
+    if(dx<0){if(!nav(1))api().toast&&api().toast("That's the last report");}
+    else if(!nav(-1)){api().haptic&&api().haptic();close();}},{passive:true});
 })();
 window.__rp={open,close,prefetch,isOpen:()=>view.classList.contains("on")};
 })();

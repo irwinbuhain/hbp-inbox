@@ -72,6 +72,7 @@ function renderReports(){
   const R=S.reports||[];
   if(!R.length){list.append(el("div",{class:"empty"},el("strong",{text:"No reports yet"}),"End-of-day and morning reports from each bot will show up here."));return;}
   const today=nowT().slice(0,10);const groups={};R.forEach(r=>{const d=(r.date||r.created||"").slice(0,10);(groups[d]=groups[d]||[]).push(r);});
+  const ord=Object.keys(groups).sort().reverse().flatMap(d=>groups[d].map(r=>r.id));window.__rpOrder=()=>ord;
   Object.keys(groups).sort().reverse().forEach(d=>{list.append(el("div",{class:"sect",text:d===today?"Today":d}));
     groups[d].forEach(r=>list.append(el("button",{class:"row",type:"button",onclick:()=>window.__rp&&window.__rp.open(r.id)},
       el("span",{class:"dot"},Number(r.open)>0?el("i"):null),
@@ -97,14 +98,14 @@ function renderList(){
   const s=scope();const open=openQueue();
   const fyi=s.filter(r=>r.status==="FYI").sort((a,b)=>sortKey(b.created).localeCompare(sortKey(a.created)));
   const dec=s.filter(r=>r.status==="Decided").sort((a,b)=>sortKey(b.decidedAt).localeCompare(sortKey(a.decidedAt)));
-  if(!open.length&&!fyi.length&&!dec.length&&!S.error&&!(S.uw||[]).length){list.append(el("div",{class:"empty"},el("strong",{text:"All caught up"}),"When a bot needs you, it shows up here like a new message."));return;}
+  if(!open.length&&!fyi.length&&!S.error&&!(S.uw||[]).length){list.append(el("div",{class:"empty"},el("strong",{text:"All caught up"}),"When a bot needs you, it shows up here like a new message."));return;}
   const section=(label,rows,unread)=>{if(!rows.length)return;list.append(el("div",{class:"sect",text:label}));rows.forEach(r=>list.append(rowEl(r,unread)));};
   const uws=(S.uw||[]).filter(u=>!/^(drafting|error)/i.test(String(u.status||"").trim())).sort((x,y)=>String(y.created||"").localeCompare(String(x.created||"")));
   const uwOpen=uws.filter(u=>!uwPost(u.status)),uwDone=uws.filter(u=>uwPost(u.status));
   if(uwOpen.length){list.append(el("div",{class:"sect",text:`Underwriting to review · ${uwOpen.length}`}));uwOpen.forEach(u=>list.append(uwRow(u)));}
   section(`Needs a reply · ${open.length}`,open,true);
   section("FYI",fyi,false);
-  section("Sent to the bot",dec,false);
+  if(dec.length)list.append(el("div",{class:"hint",style:"padding:14px 0 4px;text-align:center",text:`${dec.length} decided – the bots are on ${dec.length>1?"them":"it"}`}));
   if(uwDone.length){list.append(el("div",{class:"sect",text:"Approved underwriting · deals"}));uwDone.forEach(u=>list.append(uwRow(u)));}
 }
 /* underwriting deal stage → colour (Irwin: Approved yellow, Sent green, Negotiating orange, Accepted green, Declined red) */
