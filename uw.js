@@ -106,9 +106,14 @@ html{overflow:hidden}
 .sheet .sh b{font-size:15px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sheet .sb{flex:1;overflow-y:auto;padding:12px 16px 30px}
 .xbtn{background:#2c2c2e;border:0;color:#fff;border-radius:999px;padding:6px 12px;font-size:14px;font-weight:600;flex:none}
-.lightbox{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.96);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.lightbox{position:fixed;inset:0;z-index:40;background:#000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
 .lightbox.on{opacity:1;pointer-events:auto}
 .lightbox img{max-width:100%;max-height:80vh;object-fit:contain}
+.lbs{display:flex;width:100%;height:100%;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}.lbs::-webkit-scrollbar{display:none}
+.lbs>div{flex:none;width:100%;height:100%;display:flex;align-items:center;justify-content:center;scroll-snap-align:center;scroll-snap-stop:always}
+.lbn{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));left:0;right:0;text-align:center;color:#e5e5ea;font-size:14px;font-weight:600;pointer-events:none}
+.lbx{position:absolute;top:calc(8px + env(safe-area-inset-top,0px));right:12px;width:36px;height:36px;border-radius:18px;background:rgba(255,255,255,.14);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center}
+.carall{display:block;margin:6px auto 0;background:none;border:0;color:#0a84ff;font-size:14px;font-weight:600;padding:4px 8px}
 .lightbox .cap{position:absolute;left:16px;right:16px;bottom:calc(24px + env(safe-area-inset-bottom,0px));color:#e5e5ea;font-size:14px;text-align:center}
 .uwdock{background:rgba(11,11,13,.96);border-top:1px solid #262629;padding:8px 16px calc(8px + max(env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px)));display:flex;flex-direction:column;gap:8px}
 .uwbtn{display:flex;align-items:center;justify-content:space-between;width:100%;background:#1c1c1e;border:1px solid #3a3a3c;color:#fff;border-radius:14px;padding:12px 14px;font:600 15px var(--f,system-ui);margin:8px 0}
@@ -133,17 +138,25 @@ const img=(src,cls,alt)=>src?E("img",{src,class:cls||"",alt:alt||"",loading:"laz
 const view=E("section",{id:"uwView","aria-label":"Underwriting"});
 document.body.appendChild(view);
 const lb=E("div",{class:"lightbox",onclick:()=>lb.classList.remove("on")});document.body.appendChild(lb);
-function lightbox(src,cap){lb.replaceChildren(E("img",{src,referrerpolicy:"no-referrer"}),cap?E("div",{class:"cap",text:cap}):null);lb.classList.add("on");}
+function lightbox(src,cap,list,idx){
+  if(!Array.isArray(list)||list.length<2){lb.replaceChildren(E("img",{src,referrerpolicy:"no-referrer"}),cap?E("div",{class:"cap",text:cap}):null);lb.classList.add("on");return;}
+  const st=E("div",{class:"lbs"});const n=E("div",{class:"lbn"});
+  list.forEach((p,i)=>st.append(E("div",{},E("img",{src:p,loading:Math.abs(i-(idx||0))<2?"eager":"lazy",referrerpolicy:"no-referrer",alt:cap||""}))));
+  const upd=()=>{const i=Math.round(st.scrollLeft/(st.clientWidth||1));n.textContent=`${i+1} / ${list.length}`;};
+  st.addEventListener("scroll",()=>requestAnimationFrame(upd),{passive:true});
+  lb.replaceChildren(st,n,E("div",{class:"lbx",text:"×"}),cap?E("div",{class:"cap",text:cap}):null);lb.classList.add("on");
+  requestAnimationFrame(()=>{st.scrollLeft=(idx||0)*st.clientWidth;upd();});
+}
 
 let U=null,tab="subject",map=null,sheet=null;
 let lfP=null;function loadLeaflet(){if(window.L)return Promise.resolve();if(lfP)return lfP;return lfP=new Promise((res,rej)=>{const l=document.createElement("link");l.rel="stylesheet";l.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";document.head.appendChild(l);const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
 
 function carousel(photos,label){
   const wrap=E("div");const c=E("div",{class:"car"});const n=E("div",{class:"carn"});
-  (photos||[]).forEach((p,i)=>c.append(E("img",{src:p,loading:i<2?"eager":"lazy",referrerpolicy:"no-referrer",alt:label||"",onclick:()=>lightbox(p,label)})));
+  (photos||[]).forEach((p,i)=>c.append(E("img",{src:p,loading:i<2?"eager":"lazy",referrerpolicy:"no-referrer",alt:label||"",onclick:()=>lightbox(p,label,photos,i)})));
   const upd=()=>{const i=Math.round(c.scrollLeft/(c.clientWidth+6));n.textContent=photos&&photos.length?`${i+1} / ${photos.length} · tap to enlarge`:"No photos";};
   c.addEventListener("scroll",()=>requestAnimationFrame(upd),{passive:true});setTimeout(upd,0);
-  wrap.append(c,n);return wrap;
+  wrap.append(c,n);if(photos&&photos.length>1)wrap.append(E("button",{class:"carall",text:`See all ${photos.length} photos`,onclick:()=>lightbox(photos[0],label,photos,0)}));return wrap;
 }
 function kv(pairs){const g=E("div",{class:"kv"});pairs.filter(p=>p[1]!=null&&p[1]!==""&&p[1]!=="–").forEach(([a,b])=>g.append(E("span",{text:a}),E("b",{text:String(b)})));return g;}
 function ptxt(label,text){return text?E("div",{class:"ptxt"},E("span",{class:"lbl",text:label}),text):null;}
