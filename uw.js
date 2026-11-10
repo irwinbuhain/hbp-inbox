@@ -41,6 +41,7 @@ const css=`
 .hopt{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;padding:8px 10px;color:#fff;cursor:pointer;text-align:left;font:inherit}
 .hopt span{font-size:12px;color:#8e8e93}.hopt b{font-size:15px;color:#e3b341;font-variant-numeric:tabular-nums}
 .hopt i{font-style:normal;font-size:12px;color:#d1d1d6;margin-top:2px}.hopt.on{border-color:#0a84ff;background:#0a84ff22}.hopt.on span{color:#0a84ff}
+.htb{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}.htb th{color:#8e8e93;font-weight:500;text-align:right;padding:4px 0 6px}.htb th:first-child{text-align:left}.htb td{padding:5px 0;border-top:1px solid #2c2c2e;text-align:right;font-variant-numeric:tabular-nums;color:#e5e5ea}.htb td:first-child{text-align:left;color:#aeaeb2;padding-right:8px}.htb tr.hsub td{color:#fff;font-weight:600}.htb tr.htot td{color:#e3b341;font-weight:700}
 .hwhy{font-size:12px;color:#aeaeb2;margin-top:8px;line-height:1.35}
 .hdet{margin-top:8px}.hdet summary{font-size:13px;color:#0a84ff;cursor:pointer;padding:4px 0}
 .hbr{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-top:1px solid #2c2c2e}.hbr span{color:#aeaeb2}.hbr b{font-variant-numeric:tabular-nums;font-weight:600}.hbr.hnoi b{color:#e3b341}
@@ -250,9 +251,6 @@ function uwNums(d,reh){const o=d.offer||{},bot=String(d.bot||""),ask=Number(o.as
 function hasHold(){const h=(U.offer||{}).hold;if(h&&Number(h.noi)>0&&typeof h.min!=="number"&&!U._hc){U._hc=1;uwNums(U,Number((U.rehab||{}).total)||0);}return !!(h&&typeof h.min==="number"&&typeof h.max==="number");}
 /* End buyer's returns at our MAX / MIN offer (Irwin, Nov 9): the buyer pays our price + 3% realtor commission (not on direct deals) + our $10K fee, then the rehab.
    Fix & Flip → ROI = (ARV − all-in) ÷ all-in (before selling/holding costs). Buy & Hold → CoC = NOI ÷ all-in. */
-function uwAllIn(p){const o=U.offer||{},reh=Number((U.rehab||{}).total)||0;return p*(o.rule==="direct"?1:1.03)+10000+reh;}
-function uwRoi(p){const arv=Number((U.arv||{}).value)||0,a=uwAllIn(p);return (arv&&a>0)?(arv-a)/a:null;}
-function uwCoc(p){const noi=Number(((U.offer||{}).hold||{}).noi)||0,a=uwAllIn(p);return (noi&&a>0)?noi/a:null;}
 function setUse(x){if(!U.offer)return;U._pick=x;U.offer.use=x;uwNums(U,Number((U.rehab||{}).total)||0);openEdited=false;refreshNumbers();const b=$("uwHold");if(b)b.replaceWith(holdEl());window.__uwStrat&&window.__uwStrat();}
 function recalc(d){const lines=(d.rehab&&d.rehab.lines)||[];const before=Number((d.rehab||{}).total)||0;const total=lines.filter(l=>!l.removed).reduce((a,l)=>a+(Number(l.cost)||0),0);d.rehab.total=total;
   const o=d.offer||{},arv=Number((d.arv||{}).value)||0;if(o.originalMin===undefined){o.originalMin=o.min;o.originalMax=o.max;o.originalRehab=before;if(o.holdMax!=null)o.originalHoldMax=o.holdMax;}d.offer=o;
@@ -372,15 +370,40 @@ async function drawHoods(){
   }catch(e){}
 }
 function sumEl(){return E("div",{class:"uwsum",id:"uwSum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),...((hasHold()&&!U._pick)?[]:[E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:hasHold()?(U._pick==="hold"?"MIN · hold":"MIN · flip"):"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:hasHold()?(U._pick==="hold"?"MAX · hold":"MAX · flip"):"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)}))]),E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||s.asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)})));}
-function holdEl(){const o=U.offer||{},h=o.hold;if(!hasHold())return E("div",{id:"uwHold"});const pct=x=>(typeof x==="number")?(Math.round(x*1000)/10)+"%":"–",f=o.flip||{};
-  const row=(a,b,c)=>E("div",{class:"hbr"+(c?" "+c:"")},E("span",{text:a}),E("b",{text:b}));
-  const rents=(h.rents||[]).map(r=>row((r.unit?r.unit+" rent":"Rent")+(r.source?" ("+r.source+")":""),k(r.rent)+"/mo"));
-  return E("div",{id:"uwHold",class:"hbox"},E("div",{class:"hbt",text:U._pick?"Fix & Flip vs Buy & Hold":"Fix & Flip vs Buy & Hold · tap one to use it"}),
-    E("div",{class:"hcmp"},E("button",{type:"button",class:"hopt"+(U._pick==="flip"?" on":""),onclick:()=>setUse("flip")},E("span",{text:"Fix & Flip (ARV)"}),E("b",{text:k(f.min)+" – "+k(f.max)}),E("i",{text:"ROI "+pct(uwRoi(f.max))+" at MAX · "+pct(uwRoi(f.min))+" at MIN"})),
-      E("button",{type:"button",class:"hopt"+(U._pick==="hold"?" on":""),onclick:()=>setUse("hold")},E("span",{text:"Buy & Hold (CoC)"}),E("b",{text:k(h.min)+" – "+k(h.max)}),E("i",{text:"CoC "+pct(uwCoc(h.max))+" at MAX · "+pct(uwCoc(h.min))+" at MIN"}))),
-    E("div",{class:"hwhy",text:"Returns are the end buyer's: our offer"+(o.rule==="direct"?"":" + 3% commission")+" + $10K fee + rehab. ROI is before selling and holding costs."}),
-    E("details",{class:"hdet"},E("summary",{text:"Buy & Hold math"}),...rents,row("Gross rent / yr",k(h.grossRent)),row("Vacancy 5% · mgmt 10% · repairs 5%","−"+k((Number(h.vacancy)||0)+(Number(h.management)||0)+(Number(h.repairs)||0))),row("Insurance","−"+k(h.insurance)),row("Taxes"+(h.taxesSource?" ("+h.taxesSource+")":""),"−"+k(h.taxes)),row("NOI / yr",k(h.noi),"hnoi"),
-    row("CoC target (grade "+(((U.subject||{}).grade)||"?")+")",pct(h.cocLow)+" – "+pct(h.cocHigh)),h.cocAtAsking!=null?row("CoC at asking",pct(h.cocAtAsking)):null));}
+/* DealCheck-style breakdowns (Irwin, Nov 9) – the end buyer's numbers at our MAX and MIN offer.
+   Buyer's purchase price = our offer + 3% realtor commission (not on direct deals) + our $10K fee. All cash, no loan.
+   Fix & Flip: total cash = price + purchase closing + rehab + holding costs (taxes, insurance, utilities for the holding period); profit = ARV − selling costs − total cash; ROI = profit ÷ total cash.
+   Buy & Hold: NOI = rent − vacancy − taxes − insurance − management − repairs/CapEx; cash flow = NOI (no loan); CoC = cash flow ÷ total cash (price + closing + rehab); cap rate = NOI ÷ price. */
+const UW_FLIP={months:4,utilMo:150,sellPct:0.08,closePct:0};
+function uwBuy(P){const o=U.offer||{},comm=o.rule==="direct"?0:P*0.03;return {comm:comm,price:P+comm+10000};}
+function uwFlipCalc(P){const h=(U.offer||{}).hold||{},arv=Number((U.arv||{}).value)||0,reh=Number((U.rehab||{}).total)||0,b=uwBuy(P),close=b.price*UW_FLIP.closePct,taxes=Number(h.taxes)||0,ins=Number(h.insurance)||500,
+  holdC=UW_FLIP.months*((taxes+ins)/12+UW_FLIP.utilMo),cash=b.price+close+reh+holdC,sell=arv*UW_FLIP.sellPct,profit=arv-sell-cash;
+  return {offer:P,comm:b.comm,price:b.price,close:close,reh:reh,holdC:holdC,cash:cash,arv:arv,sell:sell,profit:profit,roi:(arv&&cash>0)?profit/cash:null,ann:(arv&&cash>0)?profit/cash*12/UW_FLIP.months:null,taxesKnown:!!Number(h.taxes)};}
+function uwHoldCalc(P){const h=(U.offer||{}).hold||{},reh=Number((U.rehab||{}).total)||0,b=uwBuy(P),gross=Number(h.grossRent)||0,vac=Number(h.vacancy)||0,taxes=Number(h.taxes)||0,ins=Number(h.insurance)||0,mg=Number(h.management)||0,rp=Number(h.repairs)||0,
+  opInc=gross-vac,exp=taxes+ins+mg+rp,noi=opInc-exp,cash=b.price+b.price*0+reh;
+  return {offer:P,comm:b.comm,price:b.price,reh:reh,cash:cash,gross:gross,vac:vac,opInc:opInc,taxes:taxes,ins:ins,mg:mg,rp:rp,exp:exp,noi:noi,cfMo:noi/12,coc:cash>0?noi/cash:null,cap:b.price>0?noi/b.price:null};}
+function uwRoi(p){return uwFlipCalc(p).roi;}
+function uwCoc(p){return uwHoldCalc(p).coc;}
+function holdEl(){const o=U.offer||{},h=o.hold,f=o.flip||((typeof o.min==="number")?{min:o.min,max:o.max}:null),hh=hasHold();if(!f&&!hh)return E("div",{id:"uwHold"});
+  const pct=x=>(typeof x==="number"&&isFinite(x))?(Math.round(x*1000)/10)+"%":"–",m=x=>(typeof x==="number"&&isFinite(x))?((x<0?"−$":"$")+Math.abs(Math.round(x)).toLocaleString("en-US")):"–",neg=x=>"−"+m(x);
+  const tbl=(title,cols,rows)=>E("details",{class:"hdet"},E("summary",{text:title}),E("table",{class:"htb"},E("tr",{},E("th",{text:""}),...cols.map(c=>E("th",{text:c}))),...rows.map(r=>E("tr",{class:r[2]||""},E("td",{text:r[0]}),...r[1].map(v=>E("td",{text:v}))))));
+  const out=[E("div",{class:"hbt",text:hh?(U._pick?"Fix & Flip vs Buy & Hold":"Fix & Flip vs Buy & Hold · tap one to use it"):"Fix & Flip"})];
+  if(hh)out.push(E("div",{class:"hcmp"},E("button",{type:"button",class:"hopt"+(U._pick==="flip"?" on":""),onclick:()=>setUse("flip")},E("span",{text:"Fix & Flip (ARV)"}),E("b",{text:k(f.min)+" – "+k(f.max)}),E("i",{text:"ROI "+pct(uwRoi(f.max))+" at MAX · "+pct(uwRoi(f.min))+" at MIN"})),
+      E("button",{type:"button",class:"hopt"+(U._pick==="hold"?" on":""),onclick:()=>setUse("hold")},E("span",{text:"Buy & Hold (CoC)"}),E("b",{text:k(h.min)+" – "+k(h.max)}),E("i",{text:"CoC "+pct(uwCoc(h.max))+" at MAX · "+pct(uwCoc(h.min))+" at MIN"}))));
+  else out.push(E("div",{class:"hwhy",text:"ROI "+pct(uwRoi(f.max))+" at MAX · "+pct(uwRoi(f.min))+" at MIN"}));
+  if(f){const a=uwFlipCalc(f.max),b=uwFlipCalc(f.min),L=(n,fn,c)=>[n,[fn(a),fn(b)],c];
+    out.push(tbl("Fix & Flip breakdown",["at MAX "+k(f.max),"at MIN "+k(f.min)],[
+      L("Our offer",x=>m(x.offer)),o.rule==="direct"?null:L("Realtor commission 3%",x=>m(x.comm)),L("Assignment fee",()=>m(10000)),L("Buyer's purchase price",x=>m(x.price),"hsub"),
+      UW_FLIP.closePct?L("Purchase closing "+pct(UW_FLIP.closePct),x=>m(x.close)):null,L("Rehab",x=>m(x.reh)),L("Holding "+UW_FLIP.months+" mo (taxes, insurance, utilities $"+UW_FLIP.utilMo+"/mo)"+(a.taxesKnown?"":" – taxes unknown"),x=>m(x.holdC)),
+      L("Total cash needed",x=>m(x.cash),"hsub"),L("ARV (sale price)",x=>m(x.arv)),L("Selling costs "+pct(UW_FLIP.sellPct)+" of ARV",x=>neg(x.sell)),L("Profit",x=>m(x.profit),"htot"),L("ROI",x=>pct(x.roi),"htot"),L("Annualized ROI",x=>pct(x.ann))].filter(Boolean)));}
+  if(hh){const a=uwHoldCalc(h.max),b=uwHoldCalc(h.min),L=(n,fn,c)=>[n,[fn(a),fn(b)],c];
+    const rents=(h.rents||[]).map(r=>[(r.unit?r.unit+" rent":"Rent")+(r.source?" ("+String(r.source).slice(0,60)+")":""),[m(r.rent)+"/mo",m(r.rent)+"/mo"]]);
+    out.push(tbl("Buy & Hold breakdown",["at MAX "+k(h.max),"at MIN "+k(h.min)],[
+      L("Our offer",x=>m(x.offer)),o.rule==="direct"?null:L("Realtor commission 3%",x=>m(x.comm)),L("Assignment fee",()=>m(10000)),L("Buyer's purchase price",x=>m(x.price),"hsub"),L("Rehab",x=>m(x.reh)),L("Total cash needed",x=>m(x.cash),"hsub"),
+      ...rents,L("Gross rent / yr",x=>m(x.gross)),L("Vacancy 5%",x=>neg(x.vac)),L("Operating income",x=>m(x.opInc),"hsub"),L("Property taxes"+(h.taxesSource?" ("+String(h.taxesSource).slice(0,40)+")":""),x=>neg(x.taxes)),L("Insurance",x=>neg(x.ins)),L("Management 10%",x=>neg(x.mg)),L("Repairs / CapEx 5%",x=>neg(x.rp)),
+      L("NOI / yr",x=>m(x.noi),"hsub"),L("Cash flow / mo (no loan)",x=>m(x.cfMo)),L("Cash-on-cash return",x=>pct(x.coc),"htot"),L("Cap rate (NOI ÷ price)",x=>pct(x.cap)),
+      ["CoC target (grade "+(((U.subject||{}).grade)||"?")+")",[pct(h.cocLow)+" – "+pct(h.cocHigh),""]]].filter(Boolean)));}
+  return E("div",{id:"uwHold",class:"hbox"},...out);}
 function noteEl(){return E("div",{id:"uwNote"},(Number(U.offer&&U.offer.max)<0)?E("div",{class:"uwnote",text:"MAX is below $0 – the numbers don't work at this rehab. See Subject › Offer formula."}):null);}
 function refreshNumbers(){window.__uwSyncOpen&&window.__uwSyncOpen();const a=$("uwSum");if(a){const sl=a.scrollLeft;const n=sumEl();a.replaceWith(n);n.scrollLeft=sl;}const b=$("uwNote");if(b)b.replaceWith(noteEl());const hb=$("uwHold");if(hb)hb.replaceWith(holdEl());
   const gk=$("uwGrade"),h=hoodAt((U.subject||{}).lat,(U.subject||{}).lng);if(gk&&h){gk.querySelector("b").textContent=h.g||"–";gk.style.borderColor=h.c;}if(tab==="repairs")renderPane();}
