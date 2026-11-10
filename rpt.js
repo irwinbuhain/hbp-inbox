@@ -38,7 +38,10 @@ function kpiTile(k){const n=Number(k.value),a=Number(k.avg7);let cmp=null;
   if(isFinite(n)&&isFinite(a)&&k.avg7!==""&&k.avg7!=null){const up=n>a,eq=n===a;const good=eq?null:(k.better==="down"?!up:up);cmp=E("span",{class:good==null?"":good?"up":"dn",text:eq?"= 7-day avg":(up?"▲ ":"▼ ")+"vs 7-day avg "+fmtNum(a,k.unit)});}
   return E("div",{class:"kt"},E("div",{class:"l",text:k.label}),E("div",{class:"v",text:fmtNum(k.value,k.unit)}),E("div",{class:"a"},cmp));}
 function stClass(s){return/done/i.test(s)?"done":/need/i.test(s)?"need":/declin/i.test(s)?"dec":"new";}
+let _rpLast=null;
 function render(){if(R&&R.id)cput(R);
+  /* Irwin (Nov 9): approving/skipping a suggestion (or a background refresh) keeps you where you were – only a different report starts at the top */
+  const _old=view.querySelector(".rpb"),_keep=(_old&&_rpLast===R.id)?_old.scrollTop:0;_rpLast=R.id;
   const d=R.data||{},acts=R.actions||[];
   const body=E("div",{class:"rpb"});
   if((d.kpis||[]).length)body.append(E("div",{class:"kgrid"},...d.kpis.map(kpiTile)));
@@ -54,6 +57,7 @@ function render(){if(R&&R.id)cput(R);
   view.replaceChildren(
     E("div",{class:"rh"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:`${R.bot} – ${R.title}`}),E("span",{text:R.date||R.created})),E("span")),
     body, api().isOwner()?E("div",{class:"rdock"},ta,snd):null);
+  if(_keep){body.scrollTop=_keep;requestAnimationFrame(()=>{body.scrollTop=_keep;});}
 }
 function sugCard(s,a){
   const c=E("div",{class:"sug"},E("div",{class:"tx",text:s.text}),s.why?E("div",{class:"wy",text:s.why}):null);
