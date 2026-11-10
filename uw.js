@@ -240,15 +240,17 @@ function compSheet(c){const L=U.comps||[];openPager(L,Math.max(0,L.indexOf(c)),x
 function backToComp(c){const L=U.comps||[];const under=sheet;openPager(L,Math.max(0,L.indexOf(c)),x=>`Comp ${x.n} · ${String(x.address||"").split(",")[0]}`,x=>compBody(x),compSheetDown);}
 function compSheetDown(){const s=U.subject||{},cur=pagerCur();revealUnder("Subject · "+String(s.address||"").split(",")[0],[E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n} · swipe up`),...subjectBody(),E("button",{class:"backcomp",type:"button",onclick:()=>backToComp(cur)},`↑ Back to Comp ${cur.n}`)],null,()=>backToComp(cur));}
 const UW_COC={A:[.05,.10],B:[.10,.15],C:[.15,.19],D:[.20,.25]};
-/* same math as the inbox server (Irwin, Nov 9): Fix & Flip from ARV – realtor 67/72%, direct 70/75%, on-market MAX ≤ asking − 25K; Buy & Hold = NOI ÷ CoC target (A 5–10%, B 10–15%, C 15–19%, D 20–25%) − rehab − $10K (÷1.03 with a realtor) */
+/* same math as the inbox server (Irwin, Nov 9): Fix & Flip from ARV – realtor 67/72%, direct 70/75%, on-market MAX ≤ asking − 25K; Buy & Hold = the price where the buyer's cash-on-cash with a DSCR loan (75% LTV, 7.25%, 30 yr, 1 pt, 2% closing) hits the CoC target (A 5–10%, B 10–15%, C 15–19%, D 20–25%), − $10K (÷1.03 with a realtor) */
+/* Buy & Hold with a DSCR loan (Irwin, Nov 9): the buyer's price B where (NOI − mortgage) ÷ (25% down + 1 pt + 2% closing + rehab) = CoC target t */
+function uwHoldB(noi,reh,t){const L=UW_LEND.hold,r=L.rate/12,n=L.years*12,mc=12*r/(1-Math.pow(1+r,-n)),den=mc*L.ltv+t*((1-L.ltv)+L.ltv*L.points+L.closePct);return (noi-t*reh)/den;}
 function uwNums(d,reh){const o=d.offer||{},bot=String(d.bot||""),ask=Number(o.asking||(d.subject||{}).asking)||0,arv=Number((d.arv||{}).value)||0;
   const direct=o.rule==="direct"||/^aq$/i.test(bot.trim())||/direct[- ]to[- ]seller/i.test(String(o.formula||"")),onM=o.rule==="onMarket"||o.onMarket===true||/listing bot/i.test(bot),rule=onM?"onMarket":direct?"direct":"realtor";
   if(arv){const lo=direct?.70:.67,hi=direct?.75:.72;let max=Math.round(hi*arv-reh-10000);if(onM&&ask)max=Math.min(max,ask-25000);let min=Math.round(lo*arv-reh-10000);min=Math.min(min,max-10000);o.flip={min,max};o.rule=rule;}
   else if(!o.flip&&typeof o.min==="number")o.flip={min:o.min,max:o.max};
   const h=o.hold,noi=Number(h&&h.noi),R=UW_COC[String((d.subject||{}).grade||"").trim().charAt(0).toUpperCase()];let hn=null;
-  if(h&&noi>0&&R){const kk=rule==="direct"?1:1.03;let max=Math.round((noi/R[0]-reh-10000)/kk);if(rule==="onMarket"&&ask)max=Math.min(max,ask-25000);let min=Math.round((noi/R[1]-reh-10000)/kk);min=Math.min(min,max-10000);hn={min,max};h.min=min;h.max=max;h.cocLow=R[0];h.cocHigh=R[1];o.holdMax=Math.round(noi/R[0]-reh);o.cashOnCashTarget=R[0];}
+  if(h&&noi>0&&R&&uwHoldB(noi,reh,R[0])>10000){const kk=rule==="direct"?1:1.03;let max=Math.round((uwHoldB(noi,reh,R[0])-10000)/kk);if(rule==="onMarket"&&ask)max=Math.min(max,ask-25000);let min=Math.round((uwHoldB(noi,reh,R[1])-10000)/kk);min=Math.min(min,max-10000);hn={min,max};h.min=min;h.max=max;h.cocLow=R[0];h.cocHigh=R[1];o.holdMax=Math.round(uwHoldB(noi,reh,R[0]));o.cashOnCashTarget=R[0];}
   o.use=(o.use==="hold"&&hn)?"hold":"flip";const p=o.use==="hold"?hn:o.flip;if(p){o.min=p.min;o.max=p.max;}d.offer=o;return o;}
-function hasHold(){const h=(U.offer||{}).hold;if(h&&Number(h.noi)>0&&typeof h.min!=="number"&&!U._hc){U._hc=1;uwNums(U,Number((U.rehab||{}).total)||0);}return !!(h&&typeof h.min==="number"&&typeof h.max==="number");}
+function hasHold(){const h=(U.offer||{}).hold;if(h&&Number(h.noi)>0&&!U._hc){U._hc=1;uwNums(U,Number((U.rehab||{}).total)||0);}return !!(h&&typeof h.min==="number"&&typeof h.max==="number");}
 /* End buyer's returns at our MAX / MIN offer (Irwin, Nov 9): the buyer pays our price + 3% realtor commission (not on direct deals) + our $10K fee, then the rehab.
    Fix & Flip → ROI = (ARV − all-in) ÷ all-in (before selling/holding costs). Buy & Hold → CoC = NOI ÷ all-in. */
 function setUse(x){if(!U.offer)return;U._pick=x;U.offer.use=x;uwNums(U,Number((U.rehab||{}).total)||0);openEdited=false;refreshNumbers();const b=$("uwHold");if(b)b.replaceWith(holdEl());window.__uwStrat&&window.__uwStrat();}
@@ -374,14 +376,20 @@ function sumEl(){return E("div",{class:"uwsum",id:"uwSum"},E("div",{class:"uwk",
    Buyer's purchase price = our offer + 3% realtor commission (not on direct deals) + our $10K fee. All cash, no loan.
    Fix & Flip: total cash = price + purchase closing + rehab + holding costs (taxes, insurance, utilities for the holding period); profit = ARV − selling costs − total cash; ROI = profit ÷ total cash.
    Buy & Hold: NOI = rent − vacancy − taxes − insurance − management − repairs/CapEx; cash flow = NOI (no loan); CoC = cash flow ÷ total cash (price + closing + rehab); cap rate = NOI ÷ price. */
-const UW_FLIP={months:4,utilMo:150,sellPct:0.08,closePct:0};
+/* Irwin (Nov 9 2026): underwriting always assumes the end buyer uses a lender – standard investor loan terms.
+   Fix & Flip = hard-money loan: 90% of purchase + 100% of rehab, capped at 70% of ARV, 10.5% interest-only, 2 points, 2% closing.
+   Buy & Hold = DSCR rental loan: 75% LTV, 7.25% fixed, 30-year amortization, 1 point, 2% closing; rehab paid in cash. */
+const UW_LEND={flip:{purchPct:.90,rehabPct:1,arvCap:.70,rate:.105,points:.02,closePct:.02,months:4,utilMo:150,sellPct:.08},hold:{ltv:.75,rate:.0725,years:30,points:.01,closePct:.02}};
+const UW_FLIP=UW_LEND.flip;
 function uwBuy(P){const o=U.offer||{},comm=o.rule==="direct"?0:P*0.03;return {comm:comm,price:P+comm+10000};}
-function uwFlipCalc(P){const h=(U.offer||{}).hold||{},arv=Number((U.arv||{}).value)||0,reh=Number((U.rehab||{}).total)||0,b=uwBuy(P),close=b.price*UW_FLIP.closePct,taxes=Number(h.taxes)||0,ins=Number(h.insurance)||500,
-  holdC=UW_FLIP.months*((taxes+ins)/12+UW_FLIP.utilMo),cash=b.price+close+reh+holdC,sell=arv*UW_FLIP.sellPct,profit=arv-sell-cash;
-  return {offer:P,comm:b.comm,price:b.price,close:close,reh:reh,holdC:holdC,cash:cash,arv:arv,sell:sell,profit:profit,roi:(arv&&cash>0)?profit/cash:null,ann:(arv&&cash>0)?profit/cash*12/UW_FLIP.months:null,taxesKnown:!!Number(h.taxes)};}
-function uwHoldCalc(P){const h=(U.offer||{}).hold||{},reh=Number((U.rehab||{}).total)||0,b=uwBuy(P),gross=Number(h.grossRent)||0,vac=Number(h.vacancy)||0,taxes=Number(h.taxes)||0,ins=Number(h.insurance)||0,mg=Number(h.management)||0,rp=Number(h.repairs)||0,
-  opInc=gross-vac,exp=taxes+ins+mg+rp,noi=opInc-exp,cash=b.price+b.price*0+reh;
-  return {offer:P,comm:b.comm,price:b.price,reh:reh,cash:cash,gross:gross,vac:vac,opInc:opInc,taxes:taxes,ins:ins,mg:mg,rp:rp,exp:exp,noi:noi,cfMo:noi/12,coc:cash>0?noi/cash:null,cap:b.price>0?noi/b.price:null};}
+function uwPmt(loan,rate,years){const r=rate/12,n=years*12;return loan>0?loan*r/(1-Math.pow(1+r,-n)):0;}
+function uwFlipCalc(P){const L=UW_LEND.flip,h=(U.offer||{}).hold||{},arv=Number((U.arv||{}).value)||0,reh=Number((U.rehab||{}).total)||0,b=uwBuy(P),taxes=Number(h.taxes)||0,ins=Number(h.insurance)||500,
+  close=b.price*L.closePct,loanReq=b.price*L.purchPct+reh*L.rehabPct,loan=Math.max(0,arv?Math.min(loanReq,arv*L.arvCap):loanReq),down=b.price+reh-loan,pts=loan*L.points,interest=loan*L.rate*L.months/12,
+  holdC=L.months*((taxes+ins)/12+L.utilMo),cash=down+close+pts+interest+holdC,sell=arv*L.sellPct,profit=arv-sell-b.price-reh-close-pts-interest-holdC;
+  return {offer:P,comm:b.comm,price:b.price,close:close,reh:reh,loan:loan,capped:arv&&loanReq>arv*L.arvCap,down:down,pts:pts,interest:interest,holdC:holdC,cash:cash,arv:arv,sell:sell,profit:profit,roi:(arv&&cash>0)?profit/cash:null,ann:(arv&&cash>0)?profit/cash*12/L.months:null,taxesKnown:!!Number(h.taxes)};}
+function uwHoldCalc(P){const L=UW_LEND.hold,h=(U.offer||{}).hold||{},reh=Number((U.rehab||{}).total)||0,b=uwBuy(P),gross=Number(h.grossRent)||0,vac=Number(h.vacancy)||0,taxes=Number(h.taxes)||0,ins=Number(h.insurance)||0,mg=Number(h.management)||0,rp=Number(h.repairs)||0,
+  opInc=gross-vac,exp=taxes+ins+mg+rp,noi=opInc-exp,loan=b.price*L.ltv,down=b.price-loan,pts=loan*L.points,close=b.price*L.closePct,cash=down+pts+close+reh,ds=uwPmt(loan,L.rate,L.years)*12,cf=noi-ds;
+  return {offer:P,comm:b.comm,price:b.price,reh:reh,loan:loan,down:down,pts:pts,close:close,cash:cash,gross:gross,vac:vac,opInc:opInc,taxes:taxes,ins:ins,mg:mg,rp:rp,exp:exp,noi:noi,ds:ds,cf:cf,cfMo:cf/12,coc:cash>0?cf/cash:null,cap:b.price>0?noi/b.price:null,dscr:ds>0?noi/ds:null};}
 function uwRoi(p){return uwFlipCalc(p).roi;}
 function uwCoc(p){return uwHoldCalc(p).coc;}
 function holdEl(){const o=U.offer||{},h=o.hold,f=o.flip||((typeof o.min==="number")?{min:o.min,max:o.max}:null),hh=hasHold();if(!f&&!hh)return E("div",{id:"uwHold"});
@@ -393,15 +401,16 @@ function holdEl(){const o=U.offer||{},h=o.hold,f=o.flip||((typeof o.min==="numbe
   else out.push(E("div",{class:"hwhy",text:"ROI "+pct(uwRoi(f.max))+" at MAX · "+pct(uwRoi(f.min))+" at MIN"}));
   if(f){const a=uwFlipCalc(f.max),b=uwFlipCalc(f.min),L=(n,fn,c)=>[n,[fn(a),fn(b)],c];
     out.push(tbl("Fix & Flip breakdown",["at MAX "+k(f.max),"at MIN "+k(f.min)],[
-      L("Our offer",x=>m(x.offer)),o.rule==="direct"?null:L("Realtor commission 3%",x=>m(x.comm)),L("Assignment fee",()=>m(10000)),L("Buyer's purchase price",x=>m(x.price),"hsub"),
-      UW_FLIP.closePct?L("Purchase closing "+pct(UW_FLIP.closePct),x=>m(x.close)):null,L("Rehab",x=>m(x.reh)),L("Holding "+UW_FLIP.months+" mo (taxes, insurance, utilities $"+UW_FLIP.utilMo+"/mo)"+(a.taxesKnown?"":" – taxes unknown"),x=>m(x.holdC)),
-      L("Total cash needed",x=>m(x.cash),"hsub"),L("ARV (sale price)",x=>m(x.arv)),L("Selling costs "+pct(UW_FLIP.sellPct)+" of ARV",x=>neg(x.sell)),L("Profit",x=>m(x.profit),"htot"),L("ROI",x=>pct(x.roi),"htot"),L("Annualized ROI",x=>pct(x.ann))].filter(Boolean)));}
+      L("Our offer",x=>m(x.offer)),o.rule==="direct"?null:L("Realtor commission 3%",x=>m(x.comm)),L("Assignment fee",()=>m(10000)),L("Buyer's purchase price",x=>m(x.price),"hsub"),L("Rehab",x=>m(x.reh)),
+      L("Loan – 90% of price + 100% of rehab"+(a.capped||b.capped?" (capped at 70% ARV)":""),x=>m(x.loan)),L("Down payment (price + rehab − loan)",x=>m(x.down)),L("Points 2% of loan",x=>m(x.pts)),L("Closing costs 2%",x=>m(x.close)),
+      L("Interest 10.5% × "+UW_FLIP.months+" mo",x=>m(x.interest)),L("Holding "+UW_FLIP.months+" mo (taxes, insurance, utilities $"+UW_FLIP.utilMo+"/mo)"+(a.taxesKnown?"":" – taxes unknown"),x=>m(x.holdC)),
+      L("Total cash needed",x=>m(x.cash),"hsub"),L("ARV (sale price)",x=>m(x.arv)),L("Selling costs "+pct(UW_FLIP.sellPct)+" of ARV",x=>neg(x.sell)),L("Profit (after loan costs)",x=>m(x.profit),"htot"),L("ROI on cash",x=>pct(x.roi),"htot"),L("Annualized ROI",x=>pct(x.ann))].filter(Boolean)));}
   if(hh){const a=uwHoldCalc(h.max),b=uwHoldCalc(h.min),L=(n,fn,c)=>[n,[fn(a),fn(b)],c];
     const rents=(h.rents||[]).map(r=>[(r.unit?r.unit+" rent":"Rent")+(r.source?" ("+String(r.source).slice(0,60)+")":""),[m(r.rent)+"/mo",m(r.rent)+"/mo"]]);
     out.push(tbl("Buy & Hold breakdown",["at MAX "+k(h.max),"at MIN "+k(h.min)],[
-      L("Our offer",x=>m(x.offer)),o.rule==="direct"?null:L("Realtor commission 3%",x=>m(x.comm)),L("Assignment fee",()=>m(10000)),L("Buyer's purchase price",x=>m(x.price),"hsub"),L("Rehab",x=>m(x.reh)),L("Total cash needed",x=>m(x.cash),"hsub"),
+      L("Our offer",x=>m(x.offer)),o.rule==="direct"?null:L("Realtor commission 3%",x=>m(x.comm)),L("Assignment fee",()=>m(10000)),L("Buyer's purchase price",x=>m(x.price),"hsub"),L("Loan 75% LTV",x=>m(x.loan)),L("Down payment 25%",x=>m(x.down)),L("Points 1% of loan",x=>m(x.pts)),L("Closing costs 2%",x=>m(x.close)),L("Rehab (cash)",x=>m(x.reh)),L("Total cash needed",x=>m(x.cash),"hsub"),
       ...rents,L("Gross rent / yr",x=>m(x.gross)),L("Vacancy 5%",x=>neg(x.vac)),L("Operating income",x=>m(x.opInc),"hsub"),L("Property taxes"+(h.taxesSource?" ("+String(h.taxesSource).slice(0,40)+")":""),x=>neg(x.taxes)),L("Insurance",x=>neg(x.ins)),L("Management 10%",x=>neg(x.mg)),L("Repairs / CapEx 5%",x=>neg(x.rp)),
-      L("NOI / yr",x=>m(x.noi),"hsub"),L("Cash flow / mo (no loan)",x=>m(x.cfMo)),L("Cash-on-cash return",x=>pct(x.coc),"htot"),L("Cap rate (NOI ÷ price)",x=>pct(x.cap)),
+      L("NOI / yr",x=>m(x.noi),"hsub"),L("Mortgage 7.25%, 30 yr",x=>neg(x.ds)),L("Cash flow / yr",x=>m(x.cf),"hsub"),L("Cash flow / mo",x=>m(x.cfMo)),L("Cash-on-cash return",x=>pct(x.coc),"htot"),L("Cap rate (NOI ÷ price)",x=>pct(x.cap)),L("DSCR (NOI ÷ mortgage)",x=>(typeof x.dscr==="number"?(Math.round(x.dscr*100)/100).toFixed(2):"–")),
       ["CoC target (grade "+(((U.subject||{}).grade)||"?")+")",[pct(h.cocLow)+" – "+pct(h.cocHigh),""]]].filter(Boolean)));}
   return E("div",{id:"uwHold",class:"hbox"},...out);}
 function noteEl(){return E("div",{id:"uwNote"},(Number(U.offer&&U.offer.max)<0)?E("div",{class:"uwnote",text:"MAX is below $0 – the numbers don't work at this rehab. See Subject › Offer formula."}):null);}
