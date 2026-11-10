@@ -146,15 +146,22 @@ const E=(tag,attrs={},...kids)=>{const n=document.createElement(tag);for(const[k
 const $$=n=>{const x=Number(n);return isFinite(x)&&x>0?"$"+x.toLocaleString("en-US",{maximumFractionDigits:0}):"–";};
 const k=n=>{if(n===""||n==null)return"–";const x=Number(n);if(!isFinite(x))return"–";const a=Math.abs(x),t=a>=1000?"$"+(Math.round(a/100)/10).toLocaleString("en-US")+"k":"$"+a;return x<0?"−"+t:t;};
 const negc=n=>Number(n)<0?" neg":"";
-const img=(src,cls,alt)=>src?E("img",{src,class:cls||"",alt:alt||"",loading:"lazy",referrerpolicy:"no-referrer",onerror:function(){this.replaceWith(E("div",{class:"noimg",text:"no photo"}));}}):E("div",{class:"noimg",text:"no photo"});
+/* Photos: Zillow CDN sizes – load a phone-sized copy first, fall back through other sizes, retry once, then show a placeholder (never a blank/broken photo) */
+function zAlts(u,big){const m=/^(https:\/\/photos\.zillowstatic\.com\/fp\/[0-9a-f]+)(-[^/?#]*)?/.exec(u||"");if(!m)return[u];const b=m[1];const o=big?["-uncropped_scaled_within_1536_1152.jpg","-cc_ft_1536.jpg","-p_f.jpg","-cc_ft_960.jpg"]:["-cc_ft_960.jpg","-p_f.jpg","-cc_ft_768.jpg","-uncropped_scaled_within_1536_1152.jpg","-p_e.jpg"];return[...new Set(o.map(x=>b+x).concat([u]))];}
+function pimg(u,attrs,big,fail){const a=zAlts(u,big);let k=0,done=false;const el=E("img",Object.assign({referrerpolicy:"no-referrer"},attrs||{},{src:a[0]}));
+  const next=()=>{if(done)return;k++;if(k<a.length){el.src=a[k];}else if(k===a.length){setTimeout(()=>{el.src=a[0]+"?r="+Date.now();},1500);}else{done=true;const f=fail?fail():E("div",{class:(attrs&&attrs.class?attrs.class+" ":"")+"noimg",text:"Photo didn't load"});el.replaceWith(f);}};
+  el.onerror=next;el.onload=()=>{done=el.naturalWidth>0;if(!done)next();};
+  if(attrs&&attrs.loading==="eager")setTimeout(()=>{if(!done&&!(el.complete&&el.naturalWidth))next();},10000);
+  return el;}
+const img=(src,cls,alt)=>src?pimg(src,{class:cls||"",alt:alt||"",loading:"lazy"},false,()=>E("div",{class:"noimg",text:"no photo"})):E("div",{class:"noimg",text:"no photo"});
 
 const view=E("section",{id:"uwView","aria-label":"Underwriting"});
 document.body.appendChild(view);
 const lb=E("div",{class:"lightbox",onclick:()=>lb.classList.remove("on")});document.body.appendChild(lb);
 function lightbox(src,cap,list,idx){
-  if(!Array.isArray(list)||list.length<2){lb.replaceChildren(E("img",{src,referrerpolicy:"no-referrer"}),cap?E("div",{class:"cap",text:cap}):null);lb.classList.add("on");return;}
+  if(!Array.isArray(list)||list.length<2){lb.replaceChildren(pimg(src,{},true),cap?E("div",{class:"cap",text:cap}):null);lb.classList.add("on");return;}
   const st=E("div",{class:"lbs"});const n=E("div",{class:"lbn"});
-  list.forEach((p,i)=>st.append(E("div",{},E("img",{src:p,loading:Math.abs(i-(idx||0))<2?"eager":"lazy",referrerpolicy:"no-referrer",alt:cap||""}))));
+  list.forEach((p,i)=>st.append(E("div",{},pimg(p,{loading:Math.abs(i-(idx||0))<2?"eager":"lazy",alt:cap||""},true))));
   const upd=()=>{const i=Math.round(st.scrollLeft/(st.clientWidth||1));n.textContent=`${i+1} / ${list.length}`;};
   st.addEventListener("scroll",()=>requestAnimationFrame(upd),{passive:true});
   lb.replaceChildren(st,n,E("div",{class:"lbx",text:"×"}),cap?E("div",{class:"cap",text:cap}):null);lb.classList.add("on");
@@ -166,7 +173,7 @@ let lfP=null;function loadLeaflet(){if(window.L)return Promise.resolve();if(lfP)
 
 function carousel(photos,label){
   const wrap=E("div");const c=E("div",{class:"car"});const n=E("div",{class:"carn"});
-  (photos||[]).forEach((p,i)=>c.append(E("img",{src:p,loading:i<2?"eager":"lazy",referrerpolicy:"no-referrer",alt:label||"",onclick:()=>lightbox(p,label,photos,i)})));
+  (photos||[]).forEach((p,i)=>c.append(pimg(p,{loading:i<2?"eager":"lazy",alt:label||"",onclick:()=>lightbox(p,label,photos,i)})));
   const upd=()=>{const i=Math.round(c.scrollLeft/(c.clientWidth+6));n.textContent=photos&&photos.length?`${i+1} / ${photos.length} · tap to enlarge`:"No photos";};
   c.addEventListener("scroll",()=>requestAnimationFrame(upd),{passive:true});setTimeout(upd,0);
   wrap.append(c,n);if(photos&&photos.length>1)wrap.append(E("button",{class:"carall",text:`See all ${photos.length} photos`,onclick:()=>lightbox(photos[0],label,photos,0)}));return wrap;
@@ -296,7 +303,7 @@ function removeBox(l){
 }
 function repairLines(){const lines=(U.rehab&&U.rehab.lines)||[];const order=[];const g={};lines.forEach(l=>{const a=l.area||"Other";if(!g[a]){g[a]=[];order.push(a);}g[a].push(l);});return order.flatMap(a=>g[a]);}
 function repairBody(l){return[
-  l.photo?E("img",{class:"rbig",src:l.photo,referrerpolicy:"no-referrer",alt:l.item,onclick:()=>lightbox(l.photo,`${l.item} – ${l.photoNote||""}`)}):E("div",{class:"rbig noimg",text:"No photo for this line"}),
+  l.photo?pimg(l.photo,{class:"rbig",alt:l.item,onclick:()=>lightbox(l.photo,`${l.item} – ${l.photoNote||""}`)}):E("div",{class:"rbig noimg",text:"No photo for this line"}),
   l.photoNote?E("div",{class:"carn",text:"Look at: "+l.photoNote}):null,
   E("div",{class:"rhead"},E("span",{text:l.area||""}),E("span",{},(l.originalCost!=null&&Number(l.originalCost)!==Number(l.cost))?E("s",{class:"oc",text:$$(l.originalCost)}):null,E("b",{text:$$(l.cost)}))),
   E("div",{class:"ritem",text:l.item}),
@@ -328,7 +335,7 @@ function paneRepairs(){
   Object.entries(groups).forEach(([area,ls])=>{
     p.append(E("div",{class:"grp"},E("span",{text:area}),E("span",{text:$$(ls.filter(x=>!x.removed).reduce((a,b)=>a+Number(b.cost||0),0))})));
     ls.forEach(l=>p.append(E("div",{class:"rl"+(l.removed?" removed":""),role:"button",tabindex:"0",onclick:()=>repairSheet(l)},
-      l.photo?E("img",{src:l.photo,loading:"lazy",referrerpolicy:"no-referrer",alt:l.item}):E("div",{class:"noimg",text:"no photo"}),
+      l.photo?pimg(l.photo,{loading:"lazy",alt:l.item}):E("div",{class:"noimg",text:"no photo"}),
       E("div",{class:"ri"},E("div",{class:"rt"},E("span",{text:l.item}),E("span",{},(l.originalCost!=null&&Number(l.originalCost)!==Number(l.cost))?E("s",{class:"oc",text:$$(l.originalCost)}):null,E("b",{text:$$(l.cost)}))),E("div",{class:"rr",text:l.removed?("Removed: "+(l.removed.reason||"")):(l.reason||"")}),(l.photoNote||l.source)?E("div",{class:"rs",text:[l.photoNote,l.source].filter(Boolean).join(" · ")}):null))));
   });
   p.append(E("div",{class:"tot"},E("span",{text:"Rehab total"}),E("b",{text:$$(U.rehab&&U.rehab.total)})));
