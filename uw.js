@@ -442,6 +442,7 @@ function render(rec){curRec=rec;cput(rec);
 }
 function dock(rec){
   const d=E("div",{class:"uwdock"});const api=window.__uwApi;
+  if(/^waiting/i.test(rec.status||"")){d.append(E("div",{style:"text-align:center;color:#ff9f0a;font-size:13px",text:`${rec.status} – the realtor was asked; it gets re-underwritten as soon as they arrive`}));return d;}
   if(/^pass/i.test(rec.status||"")){const why=String(rec.note||"").replace(/^PASS:?\s*/i,"");d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Passed by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(why&&why!=="PASS"?` · ${why}`:"")}));return d;}
   if((window.__uwPost||(x=>/approv/i.test(x)))(rec.status||"")){const m=/OPENING_OFFER:\s*(\d+)/.exec(rec.note||"");const ov=rec.openingOffer||(m?Number(m[1]):0);
     d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Approved by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(ov?(/approv/i.test(rec.status||"")?` · opening offer ${$$(ov)} – drafting, you'll approve the text`:` · opening offer ${$$(ov)}`):/OPENING_OFFER:\s*none/.test(rec.note||"")?" · no offer":"")}));return d;}
