@@ -54,52 +54,36 @@ function launchBtn(){
   b.hidden=!show;
   const L=S.launcher;let q=null;
   if(L&&L.status==="Decided"){try{q=JSON.parse(L.note||"{}").launch||null;}catch(e){}}
-  const kids=[el("span",{text:"🚀 Launch deal"})];if(q)kids.push(el("small",{text:"queued: "+String(q.address||"").split(",")[0]}));b.style.flexDirection=q?"column":"";b.style.gap=q?"0":"";b.replaceChildren(...kids);
+  const kids=[el("span",{text:"🚀 Launch deal"})];if(q)kids.push(el("small",{text:q.address?"queued: "+String(q.address).split(",")[0]:"queued"}));b.style.flexDirection=q?"column":"";b.style.gap=q?"0":"";b.replaceChildren(...kids);
 }
 function openLaunch(){
+  /* Irwin, Nov 12 6:57 PM: one tap launches every deal in GHL's Ready To Market stage – the bot gathers the details itself
+     and asks him in the inbox for anything missing. Asking = contract + $10,000 (his rule). */
   haptic();
   const L=S.launcher;
   if(!L){toast("Launch button not set up yet – ask Claude");return;}
-  if(L.status==="Decided"){let a="";try{a=(JSON.parse(L.note||"{}").launch||{}).address||"";}catch(e){}toast("Already launching "+a+" – wait for the 'new deal live' card");return;}
-  const money=v=>{const n=Number(String(v).replace(/[^0-9.]/g,""));return isFinite(n)&&n>0?Math.round(n):0;};
-  const fmt=n=>"$"+Number(n).toLocaleString("en-US");
-  const addr=el("input",{type:"text",placeholder:"123 Main St, Cleveland, OH 44105",autocomplete:"off"});
-  const con=el("input",{type:"text",inputmode:"numeric",class:"money",placeholder:"$ contract price"});
-  const ask=el("input",{type:"text",inputmode:"numeric",class:"money",placeholder:"$ contract + $10,000"});
-  const pics=el("input",{type:"url",placeholder:"Drive / Dropbox photo folder (optional)"});
-  const notes=el("textarea",{rows:"2",placeholder:"Occupancy, rents, highlights… (optional)"});
-  const sum=el("div",{class:"sum"});
-  const go=el("button",{class:"go",type:"button"},"Launch");
-  let askTouched=false;
-  const upd=()=>{const c=money(con.value);if(!askTouched)ask.value=c?fmt(c+10000):"";const a=money(ask.value);
-    const ok=addr.value.trim().length>8&&c>0&&a>0;go.disabled=!ok;
-    sum.replaceChildren(el("div",{},"Buyers see ",el("b",{text:a?fmt(a):"–"})," on the landing page."),el("div",{text:"I'll find the 50 best InvestorBase buyers, publish the page, add them to Dispo and text them + the Buyers List the branded link (no price in the text)."}));};
-  con.oninput=upd;addr.oninput=upd;ask.oninput=()=>{askTouched=true;upd();};
+  if(L.status==="Decided"){toast("Already launching – the bot picks it up within 30 min");return;}
+  const notes=el("textarea",{rows:"2",placeholder:"Photos link, occupancy, price change…"});
+  const go=el("button",{class:"go",type:"button"},"🚀 Launch");
   const close=()=>{sh.remove();};
   go.onclick=async()=>{
-    const a=money(ask.value),c=money(con.value);if(!a||!c)return;
     go.disabled=true;go.textContent="Launching…";
-    const payload={launch:{address:addr.value.trim(),contract:c,asking:a,photos:pics.value.trim(),notes:notes.value.trim(),by:S.me,at:nowT()}};
+    const payload={launch:{mode:"ready_to_market",notes:notes.value.trim(),by:S.me,at:nowT()}};
     const note=JSON.stringify(payload);
     const expect={status:L.status,draft:L.draft,amount:L.amount};
     try{const res=await run("decide",INIT,L.id,"Note",note,expect);
-      if(res&&res.ok===false){toast("Not saved – refresh and try again");go.disabled=false;go.textContent="Launch";return;}
+      if(res&&res.ok===false){toast("Not saved – refresh and try again");go.disabled=false;go.textContent="🚀 Launch";return;}
       Object.assign(L,{status:"Decided",decision:"Note",note,decidedBy:S.me,decidedAt:nowT()});
-      haptic("ok");toast("Launching "+payload.launch.address+" – live in ~30 min");close();renderList();
-    }catch(e){haptic("err");toast("Couldn't save – try again");go.disabled=false;go.textContent="Launch";}
+      haptic("ok");toast("Launching Ready To Market deals – live in ~30 min");close();renderList();
+    }catch(e){haptic("err");toast("Couldn't save – try again");go.disabled=false;go.textContent="🚀 Launch";}
   };
   const sh=el("div",{class:"lsheet",onclick:e=>{if(e.target===sh)close();}},
     el("div",{class:"card"},
-      el("h2",{text:"🚀 Launch a deal"}),
-      el("p",{text:"Ready to market? Set the price and I'll get it in front of buyers."}),
-      el("label",{text:"Property address"}),addr,
-      el("label",{text:"Contract price"}),con,
-      el("label",{text:"Asking price (buyers see this)"}),ask,
-      el("label",{text:"Photos"}),pics,
-      el("label",{text:"Notes for the landing page"}),notes,
-      sum,
+      el("h2",{text:"🚀 Launch Ready To Market deals"}),
+      el("p",{text:"I'll take every deal in GHL's Ready To Market stage, price it at contract + $10,000, gather the photos, publish the landing page, find the 50 best buyers, add them to Dispo and text them + the Buyers List the branded link. If I'm missing anything I'll ask you here first."}),
+      el("label",{text:"Notes (optional)"}),notes,
       el("div",{class:"row"},el("button",{class:"cancel",type:"button",onclick:close},"Cancel"),go)));
-  document.body.append(sh);upd();setTimeout(()=>addr.focus(),50);
+  document.body.append(sh);
 }
 function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2200);}
 function save(){try{localStorage.setItem("hbp-inbox2",JSON.stringify({who:S.who,bot:S.bot}));}catch(e){}}
