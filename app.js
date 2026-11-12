@@ -12,6 +12,33 @@ function haptic(k){try{if(k==="ok")TG.HapticFeedback.notificationOccurred("succe
 const COLS = ["id","created","bot","forWho","kind","lead","phone","property","headline","message","draft","amount","details","action","status","decision","note","decidedBy","decidedAt","botRef","resolvedAt","link","notified"];
 const S = { pending: 0, curSig: "", rows: [], who: null, bot: "all", me: "Irwin", isOwner: false, ready: false, busy: false, cur: null, confirm: false, error: null, lastLoad: null, view: "list" };
 try { const s = JSON.parse(localStorage.getItem("hbp-inbox2") || "{}"); if (s.who) S.who = s.who; if (s.bot) S.bot = s.bot; } catch (e) {}
+
+/* Irwin, Nov 12: whatever he decides shows at once and STAYS decided – a refresh that brings back older server data
+   (the server can lag a minute behind) never puts a task, underwriting or report suggestion back in front of him.
+   Local decisions are kept for 30 min (on this phone) and laid over every load until the server shows them too. */
+const OV=(()=>{let m={};try{m=JSON.parse(localStorage.getItem("hbp-ov")||"{}");}catch(e){}
+  const TTL=30*60e3,save=()=>{try{localStorage.setItem("hbp-ov",JSON.stringify(m));}catch(e){}};
+  const now=()=>Date.now();
+  const gc=()=>{let ch=0;for(const k in m)if(now()-m[k].t>TTL){delete m[k];ch=1;}if(ch)save();};
+  const fix=(k,obj)=>{const o=m[k];if(!o||!obj)return obj;
+    if(obj.status!=null&&o.f.status!=null&&String(obj.status)===String(o.f.status))return obj;   /* already shows our decision (e.g. from this phone's cache) – keep watching */
+    const B=(o.b!=null&&typeof o.b==="object")?o.b:{status:o.b};if(o.b!=null&&Object.keys(B).some(f=>obj[f]!=null&&String(obj[f])!==String(B[f]))){delete m[k];save();return obj;}   /* server moved on (caught up or someone else acted) */
+    Object.assign(obj,o.f);return obj;};
+  return {
+    set(k,fields,base){m[k]={f:fields,b:base,t:now()};save();},
+    del(k){delete m[k];save();},
+    rows(L){gc();(L||[]).forEach(r=>fix("t:"+r.id,r));return L;},
+    uw(L){gc();(L||[]).forEach(u=>fix("u:"+u.id,u));return L;},
+    one(kind,obj){gc();return obj?fix((kind==="uw"?"u:":"r:")+obj.id,obj):obj;},
+    rp(L){gc();(L||[]).forEach(r=>{const o=m["r:"+r.id];if(!o)return;if(Number(r.open)<=Number(o.f.open)){delete m["r:"+r.id];save();}else r.open=o.f.open;});return L;},
+    acts(id){gc();const o=m["a:"+id];return o?o.f:[];},
+    addAct(id,a){const k="a:"+id;const L=(m[k]&&m[k].f)||[];L.push(a);m[k]={f:L,b:null,t:now()};save();},
+    dropAct(id,text){const k="a:"+id;if(!m[k])return;m[k].f=m[k].f.filter(x=>x.text!==text);if(!m[k].f.length)delete m[k];save();},
+    mergeActs(R){if(!R||!R.id)return R;const la=this.acts(R.id);if(!la.length)return R;R.actions=R.actions||[];
+      const k="a:"+R.id;let keep=[];la.forEach(a=>{const seen=R.actions.some(x=>x.text===a.text&&(x.kind||"")===(a.kind||""));if(!seen){R.actions.push(a);keep.push(a);}});
+      if(keep.length!==la.length){if(keep.length)m[k].f=keep;else delete m[k];save();}return R;}
+  };})();
+window.__ov=OV;
 const $ = (id) => document.getElementById(id);
 const el = (tag, attrs = {}, ...kids) => { const n = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === "class") n.className = v; else if (k === "text") n.textContent = v; else if (k.startsWith("on")) n.addEventListener(k.slice(2), v); else if (v !== null && v !== undefined && v !== false) n.setAttribute(k, v); } for (const k of kids) if (k) n.append(k); return n; };
 function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2200);}
@@ -37,7 +64,7 @@ function title(r){return r.lead||r.property||r.bot||r.id;}
 function parse(values){const out=[];(values||[]).slice(1).forEach((row,i)=>{const r={};COLS.forEach((c,j)=>r[c]=row[j]==null?"":String(row[j]));r.rowNum=i+2;if(r.id)out.push(r);});return out;}
 async function load(manual){
   if(!S.ready||S.pending>0)return;
-  try{const d=await run("getData",INIT);if(S.pending>0)return;S.me=d.me;S.isOwner=d.isIrwin;S.rows=parse(d.values);S.uw=d.uw||[];S.reports=d.reports||[];S.lastLoad=nowT();S.error=null;
+  try{const d=await run("getData",INIT);if(S.pending>0)return;S.me=d.me;S.isOwner=d.isIrwin;S.rows=OV.rows(parse(d.values));S.uw=OV.uw(d.uw||[]);S.reports=OV.rp(d.reports||[]);S.lastLoad=nowT();S.error=null;
     try{localStorage.setItem("hbp-cache",JSON.stringify({me:S.me,isOwner:S.isOwner,values:d.values,uw:S.uw,reports:S.reports}));}catch(e){}}
   catch(e){S.error=e;}
   if(S.view==="thread"&&S.cur&&!S.rows.find(r=>r.id===S.cur)){closeThread();return;}
@@ -265,6 +292,7 @@ async function decide(r,decision,note){
   if(isOffer(r)&&decision==="Approve"&&!S.isOwner){haptic("err");toast("Only Irwin can approve offers");return;}
   const before={...r},expect={status:r.status,draft:r.draft,amount:r.amount};
   Object.assign(r,{status:(r.status==="FYI"&&decision==="Done")?"Resolved":"Decided",decision,note:note||"",decidedBy:S.me,decidedAt:nowT()});
+  OV.set("t:"+r.id,{status:r.status,decision,note:note||"",decidedBy:S.me,decidedAt:r.decidedAt},{status:before.status,draft:before.draft||"",amount:before.amount||"",created:before.created||""});
   try{sessionStorage.removeItem("c-"+r.id);}catch(e){}
   haptic("ok");toast(decision==="Approve"?"Approved":decision==="Skip"?"Skipped":decision==="Done"?"Done":"Sent to the bot");
   const next=openQueue().find(x=>x.id!==r.id);
@@ -273,9 +301,9 @@ async function decide(r,decision,note){
   try{
     const res=await run("decide",INIT,r.id,decision,note||"",expect);
     S.pending--;
-    if(!res.ok){haptic("err");S.rows=parse(res.values);toast(res.reason==="GONE"?"That task is gone":res.reason==="IRWIN_ONLY"?"Only Irwin can approve offers":"Not saved – that task changed, check it again");render();return;}
-    if(S.pending===0){S.rows=parse(res.values);renderList();try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c){c.values=res.values;localStorage.setItem("hbp-cache",JSON.stringify(c));}}catch(e){}}
-  }catch(e){S.pending--;Object.assign(r,before);haptic("err");toast("Couldn't save – try again");render();}
+    if(!res.ok){OV.del("t:"+r.id);haptic("err");S.rows=OV.rows(parse(res.values));toast(res.reason==="GONE"?"That task is gone":res.reason==="IRWIN_ONLY"?"Only Irwin can approve offers":"Not saved – that task changed, check it again");render();return;}
+    if(S.pending===0){S.rows=OV.rows(parse(res.values));renderList();try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c){c.values=res.values;localStorage.setItem("hbp-cache",JSON.stringify(c));}}catch(e){}}
+  }catch(e){S.pending--;OV.del("t:"+r.id);Object.assign(r,before);haptic("err");toast("Couldn't save – try again");render();}
 }
 
 /* pull down to refresh the list – iOS-style spinner */
@@ -341,7 +369,9 @@ async function decide(r,decision,note){
   if(!START){try{START=new URLSearchParams(location.search).get("task")||"";}catch(e){}}
   window.__uwApi={run:(fn,...x)=>run(fn,INIT,...x),isOwner:()=>S.isOwner,me:()=>S.me,toast,haptic,
     /* instant list updates after acting in the underwriting / report screens */
-    patch:(kind,id,fields)=>{const L=kind==="uw"?S.uw:S.reports;const it=(L||[]).find(x=>x.id===id||(x.inboxIds||[]).indexOf(id)>=0);if(it)Object.assign(it,fields);renderList();
+    patch:(kind,id,fields)=>{const L=kind==="uw"?S.uw:S.reports;const it=(L||[]).find(x=>x.id===id||(x.inboxIds||[]).indexOf(id)>=0);
+      if(it){const key=(kind==="uw"?"u:":"r:")+it.id;if(kind==="uw")OV.set(key,fields,it.status);else OV.set(key,fields,null);Object.assign(it,fields);}
+      renderList();
       try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c){c.uw=S.uw;c.reports=S.reports;localStorage.setItem("hbp-cache",JSON.stringify(c));}}catch(e){}},
     refresh:()=>{setTimeout(()=>load(false),300);},
 backOn:()=>{try{TG.BackButton.show();}catch(e){}},backOff:()=>syncBack()};
@@ -349,7 +379,7 @@ backOn:()=>{try{TG.BackButton.show();}catch(e){}},backOff:()=>syncBack()};
   {const u=document.createElement("script");u.src="uw.js?v="+Date.now();document.body.appendChild(u);const r=document.createElement("script");r.src="rpt.js?v="+Date.now();document.body.appendChild(r);}
   S.ready=true;
   if(!INIT){$("sub").textContent="";$("list").replaceChildren(errorBox(new Error("NOT_TELEGRAM")));return;}
-  try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c&&c.values){S.me=c.me;S.isOwner=c.isOwner;S.rows=parse(c.values);S.uw=c.uw||[];S.reports=c.reports||[];renderList();}}catch(e){}
+  try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c&&c.values){S.me=c.me;S.isOwner=c.isOwner;S.rows=OV.rows(parse(c.values));S.uw=OV.uw(c.uw||[]);S.reports=OV.rp(c.reports||[]);renderList();}}catch(e){}
   if(/^RPT-/.test(START)){S.mode="reports";const t=setInterval(()=>{if(window.__rp){clearInterval(t);window.__rp.open(START);}},100);}
   if(/^UW-/.test(START)){const t=setInterval(()=>{if(window.__uw){clearInterval(t);window.__uw.open(START);}},100);}
   if(START&&S.rows.find(r=>r.id===START))openThread(START);

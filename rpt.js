@@ -70,14 +70,15 @@ function sugCard(s,a){
 const DONE=new Set();
 async function act(decision,text,note){
   const A=api();const prev=JSON.stringify(R.actions||[]);
-  (R.actions=R.actions||[]).push({when:"now",kind:decision==="Instruction"?"Instruction":"Suggestion",text,note,by:A.me(),status:decision==="Skip"?"Declined":"New",result:""});
+  const _a={when:"now",kind:decision==="Instruction"?"Instruction":"Suggestion",text,note,by:A.me(),status:decision==="Skip"?"Declined":"New",result:""};
+  (R.actions=R.actions||[]).push(_a);try{window.__ov&&window.__ov.addAct(R.id,_a);}catch(_){}cput(R);
   A.haptic("ok");A.toast(decision==="Skip"?"Skipped":"Sent to Claude");render();
   const left=()=>{const d=(R.actions||[]).filter(a=>a.kind==="Suggestion").map(a=>a.text);return ((R.data&&R.data.suggestions)||[]).filter(x=>d.indexOf(x.text)<0).length;};
   A.patch&&A.patch("rp",R.id,{open:left()});
   /* Irwin, Nov 9: once every suggestion in this report is decided, go to the next report that needs you */
   const me=R.id;if(left()===0){DONE.add(me);setTimeout(()=>{if(openId!==me)return;const n=window.__rpNextOpen&&window.__rpNextOpen(me,DONE);if(n){A.toast("Next report");open(n);view.classList.remove("rp-l","rp-r");void view.offsetWidth;view.classList.add("rp-l");}else{A.toast("All reports reviewed");close();}},900);}
   try{const r=await A.run("reportAction",R.id,decision,text,note||"");if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");A.refresh&&A.refresh();}
-  catch(e){R.actions=JSON.parse(prev);A.haptic("err");A.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can do this":"Couldn't save – try again");render();A.patch&&A.patch("rp",R.id,{open:left()});}
+  catch(e){try{window.__ov&&window.__ov.dropAct(R.id,text);}catch(_){}R.actions=JSON.parse(prev);cput(R);A.haptic("err");A.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can do this":"Couldn't save – try again");render();A.patch&&A.patch("rp",R.id,{open:left()});}
 }
 /* cache: reports open instantly from memory/localStorage, then refresh in the background */
 const MEM={};
@@ -87,9 +88,9 @@ let openId=null;
 async function open(id){
   const A=api();openId=id;const c=cget(id);
   view.classList.add("on");A.backOn();view.style.transform="";
-  if(c){R=c;render();}
+  if(c){try{window.__ov&&window.__ov.mergeActs(c);}catch(_){}R=c;render();}
   else view.replaceChildren(E("div",{class:"rh"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:"Loading report…"})),E("span")));
-  try{const f=await A.run("getReport",id);if(!f)throw new Error("GONE");cput(f);
+  try{const f=await A.run("getReport",id);if(!f)throw new Error("GONE");try{window.__ov&&window.__ov.mergeActs(f);}catch(_){}cput(f);
     if(openId===id&&view.classList.contains("on")&&(!c||JSON.stringify(f)!==JSON.stringify(c))&&!(document.activeElement&&document.activeElement.tagName==="TEXTAREA"&&view.contains(document.activeElement))){R=f;render();}}
   catch(e){if(!c){A.toast("Couldn't load the report");close();}}
 }

@@ -498,12 +498,12 @@ async function decide(rec,decision,note){
   const api=window.__uwApi;const prev=rec.status;
   rec.status=decision==="Approve"?"Approved":decision==="Pass"?"Passed":"Change requested";rec.decidedBy=api.me();rec.decidedAt="now";if(decision==="Pass")rec.note=note;
   api.haptic("ok");api.toast(decision==="Approve"?"Underwriting approved":decision==="Pass"?"Passed – no offer":"Sent to the bot");render(rec);
-  api.patch&&api.patch("uw",rec.id,{status:rec.status,decidedBy:rec.decidedBy});
+  api.patch&&api.patch("uw",rec.id,{status:rec.status,decidedBy:rec.decidedBy});cput(rec);
   const still=()=>curRec&&curRec.id===rec.id;
   /* Irwin, Nov 9: after approving or changing, go straight to the next underwriting to review */
   setTimeout(()=>{if(!still())return;const q=(window.__uwQueue&&window.__uwQueue())||[];const n=q.find(id=>id!==rec.id);if(sheet)closeSheet();if(n){api.toast("Next underwriting");open(n);}else{api.toast("All underwritings reviewed");close();}},900);
   try{const r=await api.run("decideUnderwriting",rec.id,decision,note);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");if(r.offer){if(r.offer.sent){api.toast("Offer texted ✓");rec.status="Sent";api.patch&&api.patch("uw",rec.id,{status:"Sent"});cput(rec);if(still())render(rec);}else api.toast("Approved – offer not sent yet, check the inbox");}api.refresh&&api.refresh();}
-  catch(e){rec.status=prev;api.haptic("err");api.toast("Couldn't save – "+(decision==="Approve"?"underwriting not approved":decision==="Pass"?"pass not saved":"change not sent")+", try again");cput(rec);if(still())render(rec);api.patch&&api.patch("uw",rec.id,{status:prev});}
+  catch(e){rec.status=prev;try{window.__ov&&window.__ov.del("u:"+rec.id);}catch(_){}api.haptic("err");api.toast("Couldn't save – "+(decision==="Approve"?"underwriting not approved":decision==="Pass"?"pass not saved":"change not sent")+", try again");cput(rec);if(still())render(rec);api.patch&&api.patch("uw",rec.id,{status:prev});}
 }
 let opening=false;
 /* cache: underwritings open instantly from memory/localStorage, then refresh in the background */
@@ -519,7 +519,7 @@ async function open(key){
   if(c){tab="subject";render(c);}
   else view.replaceChildren(E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:"Loading underwriting…"})),E("span")),E("div",{class:"uwbody"},E("div",{id:"uwMap"})));
   opening=false;
-  try{const rec=await api.run("getUnderwriting",key);if(!rec)throw new Error("NOT_FOUND");cput(rec,key);
+  try{const rec=await api.run("getUnderwriting",key);if(!rec)throw new Error("NOT_FOUND");try{window.__ov&&window.__ov.one("uw",rec);}catch(_){}cput(rec,key);
     const busy=sheet||lb.classList.contains("on")||(document.activeElement&&/TEXTAREA|INPUT/.test(document.activeElement.tagName)&&view.contains(document.activeElement));
     if(openKey===key&&view.classList.contains("on")&&!busy&&(!c||JSON.stringify(rec)!==JSON.stringify(c))){const t=tab;render(rec);if(t!==tab){tab=t;renderPane();}}}
   catch(e){if(!c){api.toast("Couldn't load the underwriting");close();}}
