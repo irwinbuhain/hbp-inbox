@@ -140,7 +140,7 @@ let pfT=0;function prefetchDetails(){clearTimeout(pfT);pfT=setTimeout(()=>{
   if(window.__uw&&window.__uw.prefetch)window.__uw.prefetch(uw).then(()=>window.__rp&&window.__rp.prefetch&&window.__rp.prefetch(rp));
   else if(window.__rp&&window.__rp.prefetch)window.__rp.prefetch(rp);
   if(!window.__uw||!window.__rp)prefetchDetails();},window.__uw&&window.__rp?400:800);}
-function scope(){const w=S.who||(S.isOwner?"irwin":"dandy");return S.rows.filter(r=>forMatch(r,w)&&(S.bot==="all"||r.bot===S.bot));}
+function scope(){const w=S.isOwner?"all":(S.who||"dandy");return S.rows.filter(r=>forMatch(r,w)&&(S.bot==="all"||r.bot===S.bot));}
 function openQueue(){return scope().filter(r=>r.status==="Open").sort((a,b)=>(isOffer(b)-isOffer(a))||sortKey(a.created).localeCompare(sortKey(b.created)));}
 function navQueue(){const s=scope();const open=openQueue();const fyi=s.filter(r=>r.status==="FYI").sort((a,b)=>sortKey(b.created).localeCompare(sortKey(a.created)));const dec=s.filter(r=>r.status==="Decided").sort((a,b)=>sortKey(b.decidedAt).localeCompare(sortKey(a.decidedAt)));return open.concat(fyi,dec);}
 
@@ -173,8 +173,8 @@ function renderList(){
   modeSeg();
   launchBtn();
   if(S.mode==="reports"){renderReports();return;}
-  $("whoSeg").hidden=false;
-  const w=S.who||(S.isOwner?"irwin":"dandy");
+  /* Irwin, Nov 12 4:58 PM: "For now I will handle all the tasks. Lets remove Dandy for now" – Irwin sees every task in one list. */
+  const w=S.isOwner?"all":(S.who||"dandy");$("whoSeg").hidden=!!S.isOwner;
   $("sub").textContent=S.lastLoad?`${S.me} · updated ${longTime(S.lastLoad)}`:S.me;
   const seg=$("whoSeg");seg.replaceChildren();
   const cnt=k=>S.rows.filter(r=>r.status==="Open"&&forMatch(r,k)).length;
