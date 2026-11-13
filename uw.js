@@ -32,6 +32,8 @@ const css=`
 .uwk span{display:block;font-size:11px;color:#8e8e93;text-transform:uppercase;letter-spacing:.4px}
 .uwk b{font-size:17px;font-variant-numeric:tabular-nums}
 .uwk.gold b{color:#e3b341}
+.uwnote.mc{display:block;width:calc(100% - 32px);text-align:left;border:1px solid #ff9f0a55;background:#ff9f0a1f;color:#ffd08a;font:14px system-ui}
+.uwnote.mc b{color:#ff9f0a}
 .uwk.ed{border:0;color:inherit;text-align:left;font:inherit;cursor:pointer}
 .uwk.ed span{color:#7fb2ff}
 .uwk.neg b{color:#ff453a}
@@ -457,7 +459,7 @@ function holdEl(){const o=U.offer||{},h=o.hold,f=o.flip||((typeof o.min==="numbe
       L("NOI / yr",x=>m(x.noi),"hsub"),L("Mortgage 7.25%, 30 yr",x=>neg(x.ds)),L("Cash flow / yr",x=>m(x.cf),"hsub"),L("Cash flow / mo",x=>m(x.cfMo)),L("Cash-on-cash return",x=>pct(x.coc),"htot"),L("Cap rate (NOI ÷ price)",x=>pct(x.cap)),L("DSCR (NOI ÷ mortgage)",x=>(typeof x.dscr==="number"?(Math.round(x.dscr*100)/100).toFixed(2):"–")),
       ["CoC target (grade "+(((U.subject||{}).grade)||"?")+")",[pct(h.cocLow)+" – "+pct(h.cocHigh),""]]].filter(Boolean)));}
   return E("div",{id:"uwHold",class:"hbox"},...out);}
-function noteEl(){return E("div",{id:"uwNote"},(Number(U.offer&&U.offer.max)<0)?E("div",{class:"uwnote",text:"MAX is below $0 – the numbers don't work at this rehab. See Subject › Offer formula."}):null);}
+function noteEl(){const mc=U.manualCheck,arvEd=U.arv&&U.arv.edit;return E("div",{id:"uwNote"},(mc&&!arvEd)?E("button",{type:"button",class:"uwnote mc",onclick:arvSheet},E("b",{text:"Manual comp check needed"}),E("span",{text:" – "+String(mc.reason||"not enough comps inside the major roads in the last 12 months")+". Pull comps and tap to set the ARV."})):null,(Number(U.offer&&U.offer.max)<0)?E("div",{class:"uwnote",text:"MAX is below $0 – the numbers don't work at this rehab. See Subject › Offer formula."}):null);}
 function refreshNumbers(){window.__uwSyncOpen&&window.__uwSyncOpen();const a=$("uwSum");if(a){const sl=a.scrollLeft;const n=sumEl();a.replaceWith(n);n.scrollLeft=sl;}const b=$("uwNote");if(b)b.replaceWith(noteEl());const hb=$("uwHold");if(hb)hb.replaceWith(holdEl());
   const gk=$("uwGrade"),h=hoodAt((U.subject||{}).lat,(U.subject||{}).lng);if(gk&&h){gk.querySelector("b").textContent=h.g||"–";gk.style.borderColor=h.c;}if(tab==="repairs")renderPane();}
 let curRec=null,openEdited=false;
