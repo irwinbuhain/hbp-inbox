@@ -32,6 +32,8 @@ const css=`
 .uwk span{display:block;font-size:11px;color:#8e8e93;text-transform:uppercase;letter-spacing:.4px}
 .uwk b{font-size:17px;font-variant-numeric:tabular-nums}
 .uwk.gold b{color:#e3b341}
+.uwk.ed{border:0;color:inherit;text-align:left;font:inherit;cursor:pointer}
+.uwk.ed span{color:#7fb2ff}
 .uwk.neg b{color:#ff453a}
 .uwk.neg{box-shadow:inset 0 0 0 1px #5a2a24}
 .uwnote{margin:6px 16px 0;font-size:12px;color:#ff9f8a}
@@ -275,6 +277,41 @@ async function editLine(l,action,reason,newCost){
   try{const r=await api.run("editRepair",curRec.id,idx,l.item,action,reason||"",action==="cost"?Number(newCost):null);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");curRec.data=r.data;U=r.data;refreshNumbers();}
   catch(e){const d=JSON.parse(snap);curRec.data=d;U=d;api.haptic("err");api.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can change the repair budget":"Couldn't save – try again");pagerClose();refreshNumbers();}
 }
+/* Irwin, Nov 12 2026: "Always allow for the figures in the underwriting to be updated (ARV, Repairs, and Rent). Because these figures affect the offer."
+   ARV and rent are edited here (repairs line by line on the Repairs tab); the server (editFigures) saves them and redoes the same offer math. */
+function uwHoldFromRents(h){const g=(h.rents||[]).reduce((a,r)=>a+(Number(r.rent)||0),0)*12;h.grossRent=g;h.vacancy=Math.round(g*.05);h.management=Math.round(g*.10);h.repairs=Math.round(g*.05);h.noi=Math.round(g-h.vacancy-h.management-h.repairs-(Number(h.insurance)||0)-(Number(h.taxes)||0));return h;}
+function uwRedo(d){if(d.rehab&&(d.rehab.lines||[]).length)recalc(d);const reh=Number((d.rehab||{}).total)||0;d.offer=d.offer||{};uwNums(d,reh);U._hc=1;}
+function figApply(d,field,val,reason,by){
+  if(field==="arv"){const a=d.arv=d.arv||{};const from=Number(a.value)||0;if(a.originalValue===undefined)a.originalValue=from;a.value=Math.round(val);a.edit={by,at:"now",reason,from};}
+  else{const o=d.offer=d.offer||{},s=d.subject||{};let h=o.hold;
+    if(!h){const n=Math.max(1,Number(s.units)||1);h=o.hold={rents:Array.from({length:n},(_,i)=>({unit:n>1?"Unit "+(i+1):"House",rent:0})),insurance:500*n,taxes:Number(val.taxes)||0,taxesSource:"entered by Irwin"};}
+    else if(val.taxes!=null&&val.taxes!==Number(h.taxes)){if(h.originalTaxes===undefined)h.originalTaxes=Number(h.taxes)||0;h.taxes=Math.round(val.taxes);h.taxesSource="entered by Irwin";}
+    (val.rents||[]).forEach((v,i)=>{const r=h.rents[i];if(r&&v!=null&&v!==Number(r.rent)){if(r.originalRent===undefined)r.originalRent=Number(r.rent)||0;r.rent=Math.round(v);r.edit={by,at:"now",reason};}});
+    uwHoldFromRents(h);}
+  uwRedo(d);return d;}
+async function editFig(field,val,reason){const api=window.__uwApi;if(!api.isOwner()){api.toast("Only Irwin can change the underwriting numbers");return;}
+  const snap=JSON.stringify(U);figApply(U,field,val,reason,api.me());closeSheet();api.haptic("ok");
+  api.toast(field==="arv"?`ARV now ${$$(U.arv.value)} – offer updated`:`Rent updated – NOI ${$$((U.offer.hold||{}).noi)}/yr`);refreshNumbers();
+  try{const r=await api.run("editFigures",curRec.id,field,val,reason);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");const keep=U._pick;curRec.data=r.data;U=r.data;if(keep)U._pick=keep;U._hc=0;refreshNumbers();}
+  catch(e){const d=JSON.parse(snap);curRec.data=d;U=d;api.haptic("err");api.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can change the underwriting numbers":"Couldn't save – try again");refreshNumbers();}}
+function figNum(ph,lbl){const i=E("input",{type:"text",inputmode:"numeric",placeholder:ph,"aria-label":lbl});i.val=()=>{const n=Number(String(i.value).replace(/[^0-9.]/g,""));return i.value.trim()!==""&&isFinite(n)?Math.round(n):null;};return i;}
+function figForm(fields,chips,why,onSave){const ta=E("textarea",{rows:"2",placeholder:why});const save=E("button",{class:"rbtn edit",type:"button",disabled:""},"Save");
+  const upd=()=>{save.disabled=!(fields.some(f=>f.i.val()!=null&&f.i.val()!==f.cur)&&ta.value.trim());};
+  fields.forEach(f=>f.i.addEventListener("input",upd));ta.addEventListener("input",upd);save.addEventListener("click",()=>{if(!save.disabled)onSave(ta.value.trim());});
+  return [E("div",{class:"rform"},...fields.flatMap(f=>[E("div",{class:"lbl",style:"margin-top:6px",text:f.lbl}),E("div",{class:"money"},E("span",{text:"$"}),f.i)]),E("div",{class:"lbl",style:"margin-top:12px",text:"Why?"}),E("div",{class:"qchips"},...chips.map(q=>E("button",{type:"button",onclick:()=>{ta.value=ta.value.trim()?ta.value.trim()+" – "+q:q;upd();}},q))),ta,save,E("button",{class:"rcancel",type:"button",onclick:closeSheet},"Cancel"))];}
+function arvSheet(){if(!window.__uwApi.isOwner()){window.__uwApi.toast("Only Irwin can change the ARV");return;}
+  const cur=Number((U.arv||{}).value)||0,i=figNum(cur?String(cur):"ARV","New ARV");
+  openSheet("Edit ARV",[E("div",{class:"hwhy",text:"Now "+(cur?$$(cur):"not set")+((U.arv||{}).originalValue!=null?" · bot's ARV "+$$(U.arv.originalValue):"")+". MIN/MAX for Fix & Flip update right away."}),
+    ...figForm([{i,lbl:"New ARV",cur}],["My own comps","Better comps inside the major roads","Bot's comps too high","Bot's comps too low","Renovation level differs","Realtor's comps"],"Why is this the right ARV? (the AI learns from this)",why=>editFig("arv",i.val(),why))]);setTimeout(()=>i.focus(),300);}
+function rentSheet(){if(!window.__uwApi.isOwner()){window.__uwApi.toast("Only Irwin can change the rent");return;}
+  const h=(U.offer||{}).hold,s=U.subject||{},n=Math.max(1,Number(s.units)||1);
+  const rents=h?(h.rents||[]):Array.from({length:n},(_,i)=>({unit:n>1?"Unit "+(i+1):"House",rent:0}));
+  const fields=rents.map(r=>({i:figNum(String(Number(r.rent)||""),(r.unit||"Rent")+" rent"),lbl:(r.unit||"Rent")+" – rent / month",cur:Number(r.rent)||0}));
+  const tx={i:figNum(h&&h.taxes!=null?String(h.taxes):"yearly taxes","Property taxes"),lbl:"Property taxes / year"+(h?"":" (needed for the hold numbers)"),cur:h?Number(h.taxes)||0:-1};
+  openSheet("Edit rent",[E("div",{class:"hwhy",text:h?"NOI now "+$$(h.noi)+"/yr. Buy & Hold MIN/MAX update right away.":"No rent numbers yet – enter the rent and yearly taxes to get Buy & Hold offers."}),
+    ...figForm([...fields,tx],["Section 8 / HUD figure","Zillow rent estimate","Property manager's number","Current lease","Rentometer"],"Where does this rent come from? (the AI learns from this)",why=>{const t=tx.i.val();if(!h&&t==null){window.__uwApi.toast("Enter the yearly property taxes too");return;}editFig("rent",{rents:fields.map(f=>f.i.val()),taxes:t},why);})]);setTimeout(()=>fields[0].i.focus(),300);}
+function rentTotal(){const h=(U.offer||{}).hold;return h?(h.rents||[]).reduce((a,r)=>a+(Number(r.rent)||0),0):null;}
+function goRepairs(){const b=document.querySelector('button[data-t=repairs]');if(b){b.click();const t=$("uwTabs");t&&t.scrollIntoView({behavior:"smooth",block:"start"});}}
 const QUICK=["Already updated","Working condition","Rental-ready as is","Comps don't have it","Tenant/seller handles it","Covered by another line"];
 function removeBox(l){
   if(!window.__uwApi.isOwner())return null;
@@ -378,7 +415,7 @@ async function drawHoods(){
     if(tab==="comps")renderPane();
   }catch(e){}
 }
-function sumEl(){return E("div",{class:"uwsum",id:"uwSum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("div",{class:"uwk gold"},E("span",{text:"ARV"}),E("b",{text:k(U.arv&&U.arv.value)})),E("div",{class:"uwk"},E("span",{text:"Rehab"}),E("b",{text:k(U.rehab&&U.rehab.total)})),...((hasHold()&&!U._pick)?[]:[E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:hasHold()?(U._pick==="hold"?"MIN · hold":"MIN · flip"):"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:hasHold()?(U._pick==="hold"?"MAX · hold":"MAX · flip"):"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)}))]),E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||(U.subject||{}).asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)})));}
+function sumEl(){return E("div",{class:"uwsum",id:"uwSum"},E("div",{class:"uwk",id:"uwGrade",style:"border:1px solid transparent"},E("span",{text:"Grade"}),E("b",{text:(U.subject&&U.subject.grade&&U.subject.grade!=="unknown")?U.subject.grade:"…"})),E("button",{type:"button",class:"uwk gold ed",onclick:arvSheet},E("span",{text:"ARV ✎"}),E("b",{text:k(U.arv&&U.arv.value)})),E("button",{type:"button",class:"uwk ed",onclick:goRepairs},E("span",{text:"Rehab ✎"}),E("b",{text:k(U.rehab&&U.rehab.total)})),E("button",{type:"button",class:"uwk ed",onclick:rentSheet},E("span",{text:"Rent ✎"}),E("b",{text:rentTotal()?k(rentTotal())+"/mo":"–"})),...((hasHold()&&!U._pick)?[]:[E("div",{class:"uwk"+negc(U.offer&&U.offer.min)},E("span",{text:hasHold()?(U._pick==="hold"?"MIN · hold":"MIN · flip"):"MIN offer"}),E("b",{text:k(U.offer&&U.offer.min)})),E("div",{class:"uwk"+negc(U.offer&&U.offer.max)},E("span",{text:hasHold()?(U._pick==="hold"?"MAX · hold":"MAX · flip"):"MAX offer"}),E("b",{text:k(U.offer&&U.offer.max)}))]),E("div",{class:"uwk"},E("span",{text:"Asking"}),E("b",{text:k((U.offer&&U.offer.asking)||(U.subject||{}).asking)})),E("div",{class:"uwk"},E("span",{text:"Offer"}),E("b",{text:k(U.offer&&U.offer.current)})));}
 /* DealCheck-style breakdowns (Irwin, Nov 9) – the end buyer's numbers at our MAX and MIN offer.
    Buyer's purchase price = our offer + 3% realtor commission (not on direct deals) + our $10K fee. All cash, no loan.
    Fix & Flip: total cash = price + purchase closing + rehab + holding costs (taxes, insurance, utilities for the holding period); profit = ARV − selling costs − total cash; ROI = profit ÷ total cash.
