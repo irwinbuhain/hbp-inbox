@@ -100,7 +100,9 @@ function longTime(s){const t=parseT(s);if(!t)return s||"";const today=nowT().sli
 function money(a){const n=Number(String(a).replace(/[^0-9.]/g,""));return isFinite(n)&&n>0?"$"+n.toLocaleString("en-US",{maximumFractionDigits:0}):"";}
 const kindKey=k=>(k||"fyi").toLowerCase().split(/\s/)[0];
 const isOffer=r=>kindKey(r.kind)==="offer"||money(r.amount)!=="";
-const forMatch=(r,w)=>{const f=(r.forWho||"").toUpperCase();if(w==="all")return true;return f.includes(w.toUpperCase());};
+/* Irwin, Nov 12 2026: "Dandy is no longer apart of the operation. I will run everything" – every task is Irwin's (a bot that still marks one DANDY shows it under Irwin) */
+const SOLO=true;
+const forMatch=(r,w)=>{const f=(r.forWho||"").toUpperCase();if(w==="all"||(SOLO&&w==="irwin"))return true;return f.includes(w.toUpperCase());};
 function initials(r){const src=(r.lead||r.property||r.bot||"?").replace(/[^A-Za-z0-9 ]/g," ").trim().split(/\s+/);return ((src[0]||"?")[0]+((src[1]||"")[0]||"")).toUpperCase();}
 function avClass(r){const k=kindKey(r.kind);return "av"+(isOffer(r)?" offer":k==="call"?" call":k==="problem"?" problem":"");}
 function title(r){return r.lead||r.property||r.bot||r.id;}
@@ -162,7 +164,7 @@ function renderList(){
   $("sub").textContent=S.lastLoad?`${S.me} · updated ${longTime(S.lastLoad)}`:S.me;
   const seg=$("whoSeg");seg.replaceChildren();
   const cnt=k=>S.rows.filter(r=>r.status==="Open"&&forMatch(r,k)).length;
-  [["irwin","Irwin"],["dandy","Dandy"],["all","Everyone"]].forEach(([k,l])=>seg.append(el("button",{type:"button","aria-pressed":String(w===k),onclick:()=>{S.who=k;save();render();}},`${l} (${cnt(k)})`)));
+  (SOLO?[["irwin","Irwin"]]:[["irwin","Irwin"],["dandy","Dandy"],["all","Everyone"]]).forEach(([k,l])=>seg.append(el("button",{type:"button","aria-pressed":String(w===k),onclick:()=>{S.who=k;save();render();}},`${l} (${cnt(k)})`)));
   const bots=[...new Set(S.rows.map(r=>r.bot).filter(Boolean))].sort();
   const bc=$("botChips");bc.replaceChildren();bc.hidden=bots.length<2;
   [["all","All desks"]].concat(bots.map(b=>[b,b])).forEach(([k,l])=>bc.append(el("button",{class:"chip",type:"button","aria-pressed":String(S.bot===k),onclick:()=>{S.bot=k;save();render();}},l)));
