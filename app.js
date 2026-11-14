@@ -305,7 +305,7 @@ function copyName(t){t=String(t||"").trim();if(!t)return;
 const NOT_NAME=/\b(buyers?|sellers?|agents?|realtors?|leads?|owners?|tenants?|investors?|people|contacts?|list|block|group|team|no|answer|all|unknown|bot|desk|call|calls|llc|inc|properties|property|homes?|street|st|ave|avenue|rd|road|dr|drive|blvd)\b/i;
 function isName(t){t=String(t||"").trim();if(t.length<2||t.length>40||/\d|@|[\/|:#$%&+=()]/.test(t))return false;const w=t.split(/\s+/);if(w.length>4)return false;if(NOT_NAME.test(t))return false;return w.every(x=>/^[A-Z\u00C0-\u00DE][A-Za-z\u00C0-\u00FF'’.-]*$/.test(x));}
 function knownNames(r){const set=new Set();const add=n=>{n=String(n||"").trim();if(isName(n)&&n.split(/\s+/).length>=2)set.add(n);};
-  (S.rows||[]).forEach(x=>add(x.lead));
+  (S.rows||[]).forEach(x=>{add(x.lead);String(x.lead||"").split(/\s*(?:\/|,|&|\+|\band\b)\s*/).forEach(add);});
   (S.deals||[]).forEach(x=>{try{const d=JSON.parse(x.details||"{}")||{};[].concat(d.prices||[],d.notes||[],d.offers||[],d.waiting||[]).forEach(o=>add(o&&o.name));(d.walks||[]).forEach(w=>(w.buyers||[]).forEach(b=>add(b&&b.name)));}catch(e){}});
   const out=[...set];if(r&&isName(r.lead)){const f=String(r.lead).trim().split(/\s+/)[0];if(f.length>=3&&out.indexOf(f)<0)out.push(f);}
   return out.sort((a,b)=>b.length-a.length);}
@@ -345,6 +345,12 @@ function withNames(text,r){text=String(text==null?"":text);if(!text)return [text
   hits.sort((a,b)=>a[0]-b[0]);const out=[];let last=0;
   hits.forEach(([st,en,n,fn])=>{if(st<last)return;if(st>last)out.push(text.slice(last,st));out.push(nm(fn||(n.indexOf(" ")<0&&full&&full.indexOf(n)===0?full:n),"",n));last=en;});
   if(last<text.length)out.push(text.slice(last));return out;}
+/* lead cells that hold several people ("Yadira Castro-Guzman / Pedro Diaz", "Ahmad, Greg, Majdi Azzam") – every name in them is tappable */
+function leadNames(lead,cls){const t=String(lead||"").trim();if(!t)return null;if(isName(t))return nm(t,cls);
+  const parts=t.split(/(\s*(?:\/|,|&|\+|\band\b)\s*)/);if(parts.length<3)return null;
+  const isOne=p=>isName(p)||(/^[A-Z][a-z'’-]{2,}$/.test(p)&&!NN_STOP.has(p));
+  if(!parts.some((p,i)=>i%2===0&&isOne(p.trim())))return null;
+  return el("span",{class:cls||""},...parts.map((p,i)=>i%2===0&&isOne(p.trim())?nm(p.trim()):p));}
 function nm(name,cls,label){const t=String(name||"").trim();if(!t||!isName(t))return el("span",{class:cls||"",text:label||t});
   return el("span",{class:(cls?cls+" ":"")+"cpy",role:"button",title:"Tap to copy the name",text:label||t,onclick:e=>{e.stopPropagation();e.preventDefault();copyName(t);}});}
 function rowEl(r,unread){
@@ -353,7 +359,7 @@ function rowEl(r,unread){
     el("span",{class:"dot"},unread?el("i"):null),
     el("span",{class:avClass(r),"aria-hidden":"true",text:initials(r)}),
     el("span",{class:"rtext"},
-      el("span",{class:"rline"},isName(r.lead)?nm(r.lead,"rname"):el("span",{class:"rname",text:title(r)}),el("span",{class:"rtime",text:shortTime(r.created)})),
+      el("span",{class:"rline"},(leadNames(r.lead,"rname")||el("span",{class:"rname",text:title(r)})),el("span",{class:"rtime",text:shortTime(r.created)})),
       el("span",{class:"rprev",text:prev}),
       el("span",{class:"rtag"},isOffer(r)&&money(r.amount)?el("b",{text:money(r.amount)+" · "}):null,`${r.bot||""}${r.property&&r.lead?" · "+r.property:""}`)));
 }
@@ -402,12 +408,12 @@ function renderThread(){
   const q=navQueue();const i=q.findIndex(x=>x.id===r.id);
   $("backLbl").textContent=openQueue().length?String(openQueue().length):"Inbox";
   $("pos").textContent=i>=0?`${i+1} of ${q.length}`:"";
-  $("who").replaceChildren(el("span",{class:avClass(r),text:initials(r)}),isName(r.lead)?el("span",{class:"n"},nm(r.lead),"\u00a0›"):el("span",{class:"n",text:`${title(r)} ›`}));
+  $("who").replaceChildren(el("span",{class:avClass(r),text:initials(r)}),(leadNames(r.lead)?el("span",{class:"n"},leadNames(r.lead),"\u00a0›"):el("span",{class:"n",text:`${title(r)} ›`})));
   const m=$("msgs");m.replaceChildren();
   m.append(el("div",{class:"stamp"},el("b",{text:r.bot||"Bot"}),` · ${r.id} · ${longTime(r.created)}`));
   if(r.property||r.phone)m.append(el("div",{class:"sys",text:[r.property,r.phone].filter(Boolean).join(" · ")}));
   if(r.headline)m.append(el("div",{class:"sys"},el("strong",{},...withNames(r.headline,r))));
-  if(r.message){m.append(el("div",{class:"sec"},"Message from ",r.lead?nm(r.lead):"them"));m.append(el("div",{class:"b in"},...withNames(r.message,r)));}
+  if(r.message){m.append(el("div",{class:"sec"},"Message from ",leadNames(r.lead)||r.lead||"them"));m.append(el("div",{class:"b in"},...withNames(r.message,r)));}
   if(r.details){m.append(el("div",{class:"sec",text:isOffer(r)?"Underwriting & history":"Notes"}));m.append(notesCard(r.details,r));}
   const uwr=uwFor(r);if(uwr)m.append(el("button",{class:"uwopen",type:"button",onclick:()=>window.__uw&&window.__uw.open(uwr.id)},el("span",{},el("b",{text:"Review underwriting"}),el("small",{},`Map · ${uwr.comps||""} comps · repair list`,uwr.status?el("span",{style:`color:${uwColor(uwr.status)};font-weight:600`,text:" · "+uwr.status}):null)),el("span",{class:"chev",text:"›"})));
   if(r.link)m.append(el("a",{class:"linkb",href:r.link,target:"_blank",rel:"noopener",text:"Open link ↗"}));
