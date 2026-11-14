@@ -175,7 +175,7 @@ function renderList(){
   const dec=s.filter(r=>r.status==="Decided").sort((a,b)=>sortKey(b.decidedAt).localeCompare(sortKey(a.decidedAt)));
   if(!open.length&&!fyi.length&&!S.error&&!(S.uw||[]).length){list.append(el("div",{class:"empty"},el("strong",{text:"All caught up"}),"When a bot needs you, it shows up here like a new message."));return;}
   const section=(label,rows,unread)=>{if(!rows.length)return;list.append(el("div",{class:"sect",text:label}));rows.forEach(r=>list.append(rowEl(r,unread)));};
-  const uws=(S.uw||[]).filter(u=>!/^(drafting|error)/i.test(String(u.status||"").trim())).sort((x,y)=>String(y.created||"").localeCompare(String(x.created||"")));
+  const uws=(S.uw||[]).filter(u=>!/^(drafting|error|stopped)/i.test(String(u.status||"").trim())).sort((x,y)=>String(y.created||"").localeCompare(String(x.created||"")));
   const uwOpen=uws.filter(u=>!uwPost(u.status)),uwDone=uws.filter(u=>uwPost(u.status));
   if(uwOpen.length){list.append(el("div",{class:"sect",text:`Underwriting to review · ${uwOpen.length}`}));uwOpen.forEach(u=>list.append(uwRow(u)));}
   section(`Needs a reply · ${open.length}`,open,true);
