@@ -296,12 +296,26 @@ function uwRow(u){
 }
 
 /* Irwin, Nov 14 2026 9:51 AM: "Make it so that every name that's in GHL that is referenced in the Telegram app is clickable. And when clicked the full name is copied automatically. So it's easy to find them in GHL" */
-(function(){try{const st=document.createElement("style");st.textContent=".cpy{cursor:copy;text-decoration:underline dotted rgba(235,235,245,.45);text-underline-offset:3px;-webkit-tap-highlight-color:transparent}.cpy:active{opacity:.6}";document.head.appendChild(st);}catch(e){}})();
+(function(){try{const st=document.createElement("style");st.textContent=".cpy{cursor:copy;color:#0a84ff !important;text-decoration:none;-webkit-tap-highlight-color:transparent}.cpy:active{opacity:.6}";document.head.appendChild(st);}catch(e){}})();
 function copyName(t){t=String(t||"").trim();if(!t)return;
   const done=()=>{try{haptic("ok");}catch(e){}toast(`Copied “${t}”`);};
   const legacy=()=>{try{const a=document.createElement("textarea");a.value=t;a.setAttribute("readonly","");a.style.cssText="position:fixed;top:0;left:0;opacity:0";document.body.appendChild(a);a.select();a.setSelectionRange(0,t.length);const ok=document.execCommand("copy");a.remove();ok?done():toast(t);}catch(e){toast(t);}};
   try{if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,legacy);else legacy();}catch(e){legacy();}}
-function nm(name,cls,label){const t=String(name||"").trim();if(!t)return el("span",{class:cls||"",text:label||""});
+/* Irwin, Nov 14 9:55 AM: "make sure it's only names. The '42 no answer buyers' should not be able to be copied" */
+const NOT_NAME=/\b(buyers?|sellers?|agents?|realtors?|leads?|owners?|tenants?|investors?|people|contacts?|list|block|group|team|no|answer|all|unknown|bot|desk|call|calls|llc|inc|properties|property|homes?|street|st|ave|avenue|rd|road|dr|drive|blvd)\b/i;
+function isName(t){t=String(t||"").trim();if(t.length<2||t.length>40||/\d|@|[\/|:#$%&+=()]/.test(t))return false;const w=t.split(/\s+/);if(w.length>4)return false;if(NOT_NAME.test(t))return false;return w.every(x=>/^[A-Z\u00C0-\u00DE][A-Za-z\u00C0-\u00FF'’.-]*$/.test(x));}
+function knownNames(r){const set=new Set();const add=n=>{n=String(n||"").trim();if(isName(n)&&n.split(/\s+/).length>=2)set.add(n);};
+  (S.rows||[]).forEach(x=>add(x.lead));
+  (S.deals||[]).forEach(x=>{try{const d=JSON.parse(x.details||"{}")||{};[].concat(d.prices||[],d.notes||[],d.offers||[],d.waiting||[]).forEach(o=>add(o&&o.name));(d.walks||[]).forEach(w=>(w.buyers||[]).forEach(b=>add(b&&b.name)));}catch(e){}});
+  const out=[...set];if(r&&isName(r.lead)){const f=String(r.lead).trim().split(/\s+/)[0];if(f.length>=3&&out.indexOf(f)<0)out.push(f);}
+  return out.sort((a,b)=>b.length-a.length);}
+/* text → nodes with every known name tappable (blue, copies the full name; a lone first name copies the lead's full name) */
+function withNames(text,r){text=String(text==null?"":text);const L=knownNames(r);if(!text||!L.length)return [text];
+  const esc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");const re=new RegExp("(^|[^A-Za-z\u00C0-\u00FF])("+L.map(esc).join("|")+")(?![A-Za-z\u00C0-\u00FF])","g");
+  const full=r&&isName(r.lead)?String(r.lead).trim():"";const out=[];let last=0,m;
+  while((m=re.exec(text))){const st=m.index+m[1].length;if(st>last)out.push(text.slice(last,st));const n=m[2];out.push(nm(n.indexOf(" ")<0&&full&&full.indexOf(n)===0?full:n,"",n));last=st+n.length;re.lastIndex=last;}
+  if(last<text.length)out.push(text.slice(last));return out;}
+function nm(name,cls,label){const t=String(name||"").trim();if(!t||!isName(t))return el("span",{class:cls||"",text:label||t});
   return el("span",{class:(cls?cls+" ":"")+"cpy",role:"button",title:"Tap to copy the name",text:label||t,onclick:e=>{e.stopPropagation();e.preventDefault();copyName(t);}});}
 function rowEl(r,unread){
   const prev=r.status==="Decided"?`You: ${r.decision}${r.note?` – ${r.note}`:""}`:(r.headline||r.message||"");
@@ -309,7 +323,7 @@ function rowEl(r,unread){
     el("span",{class:"dot"},unread?el("i"):null),
     el("span",{class:avClass(r),"aria-hidden":"true",text:initials(r)}),
     el("span",{class:"rtext"},
-      el("span",{class:"rline"},r.lead?nm(r.lead,"rname"):el("span",{class:"rname",text:title(r)}),el("span",{class:"rtime",text:shortTime(r.created)})),
+      el("span",{class:"rline"},isName(r.lead)?nm(r.lead,"rname"):el("span",{class:"rname",text:title(r)}),el("span",{class:"rtime",text:shortTime(r.created)})),
       el("span",{class:"rprev",text:prev}),
       el("span",{class:"rtag"},isOffer(r)&&money(r.amount)?el("b",{text:money(r.amount)+" · "}):null,`${r.bot||""}${r.property&&r.lead?" · "+r.property:""}`)));
 }
@@ -344,10 +358,10 @@ function splitNotes(t){
   const out=[];parts.forEach(p=>{if(p.length>220){p.split(/(?<=[.!?)])\s+(?=(?:[A-Z][a-z]|[A-Z]{2,}|Irwin|Dandy|Offer|Step|MIN|MAX|ARV)\b)/).forEach(x=>out.push(x.trim()));}else out.push(p);});
   return out.filter(Boolean);
 }
-function notesCard(t){
+function notesCard(t,r){
   const c=el("div",{class:"notes"});
   splitNotes(t).forEach(p=>{const m=/^([A-Z][A-Za-z0-9 #/&'’().-]{1,38}?):\s+([\s\S]+)$/.exec(p);
-    c.append(m?el("div",{class:"it"},el("span",{class:"lbl",text:m[1]}),m[2]):el("div",{class:"it",text:p}));});
+    c.append(m?el("div",{class:"it"},el("span",{class:"lbl",text:m[1]}),...withNames(m[2],r)):el("div",{class:"it"},...withNames(p,r)));});
   return c;
 }
 function streetKey(s){return String(s||"").toLowerCase().split(",")[0].replace(/\b(street|st|avenue|ave|road|rd|drive|dr|boulevard|blvd|court|ct|lane|ln|place|pl)\b\.?/g,"").replace(/[^a-z0-9]/g,"");}
@@ -358,18 +372,18 @@ function renderThread(){
   const q=navQueue();const i=q.findIndex(x=>x.id===r.id);
   $("backLbl").textContent=openQueue().length?String(openQueue().length):"Inbox";
   $("pos").textContent=i>=0?`${i+1} of ${q.length}`:"";
-  $("who").replaceChildren(el("span",{class:avClass(r),text:initials(r)}),r.lead?el("span",{class:"n"},nm(r.lead),"\u00a0›"):el("span",{class:"n",text:`${title(r)} ›`}));
+  $("who").replaceChildren(el("span",{class:avClass(r),text:initials(r)}),isName(r.lead)?el("span",{class:"n"},nm(r.lead),"\u00a0›"):el("span",{class:"n",text:`${title(r)} ›`}));
   const m=$("msgs");m.replaceChildren();
   m.append(el("div",{class:"stamp"},el("b",{text:r.bot||"Bot"}),` · ${r.id} · ${longTime(r.created)}`));
   if(r.property||r.phone)m.append(el("div",{class:"sys",text:[r.property,r.phone].filter(Boolean).join(" · ")}));
-  if(r.headline)m.append(el("div",{class:"sys"},el("strong",{text:r.headline})));
-  if(r.message){m.append(el("div",{class:"sec"},"Message from ",r.lead?nm(r.lead):"them"));m.append(el("div",{class:"b in",text:r.message}));}
-  if(r.details){m.append(el("div",{class:"sec",text:isOffer(r)?"Underwriting & history":"Notes"}));m.append(notesCard(r.details));}
+  if(r.headline)m.append(el("div",{class:"sys"},el("strong",{},...withNames(r.headline,r))));
+  if(r.message){m.append(el("div",{class:"sec"},"Message from ",r.lead?nm(r.lead):"them"));m.append(el("div",{class:"b in"},...withNames(r.message,r)));}
+  if(r.details){m.append(el("div",{class:"sec",text:isOffer(r)?"Underwriting & history":"Notes"}));m.append(notesCard(r.details,r));}
   const uwr=uwFor(r);if(uwr)m.append(el("button",{class:"uwopen",type:"button",onclick:()=>window.__uw&&window.__uw.open(uwr.id)},el("span",{},el("b",{text:"Review underwriting"}),el("small",{},`Map · ${uwr.comps||""} comps · repair list`,uwr.status?el("span",{style:`color:${uwColor(uwr.status)};font-weight:600`,text:" · "+uwr.status}):null)),el("span",{class:"chev",text:"›"})));
   if(r.link)m.append(el("a",{class:"linkb",href:r.link,target:"_blank",rel:"noopener",text:"Open link ↗"}));
   if(isOffer(r)&&money(r.amount))m.append(el("div",{class:"amt",text:`Offer ${money(r.amount)}`}));
-  if(r.draft){m.append(el("div",{class:"sec r",text:"Draft – sends only when approved"}));m.append(el("div",{class:"b out draft",text:r.draft}));}
-  if(r.action){m.append(el("div",{class:"sec",text:"What's needed"}));m.append(el("div",{class:"need"},r.action));}
+  if(r.draft){m.append(el("div",{class:"sec r",text:"Draft – sends only when approved"}));m.append(el("div",{class:"b out draft"},...withNames(r.draft,r)));}
+  if(r.action){m.append(el("div",{class:"sec",text:"What's needed"}));m.append(el("div",{class:"need"},...withNames(r.action,r)));}
   if(r.status==="Decided"||r.status==="Resolved")m.append(el("div",{class:"sec r",text:"Your decision"}));
   if(r.status==="Decided"||r.status==="Resolved"){
     const ok=r.decision==="Approve";const txt=r.decision==="Approve"?"Approved ✓":r.decision==="Skip"?"Skipped":r.decision==="Done"?"Done ✓":(r.note||r.decision);
