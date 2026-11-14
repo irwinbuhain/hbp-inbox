@@ -126,7 +126,7 @@ let pfT=0;function prefetchDetails(){clearTimeout(pfT);pfT=setTimeout(()=>{
   if(window.__uw&&window.__uw.prefetch)window.__uw.prefetch(uw).then(()=>window.__rp&&window.__rp.prefetch&&window.__rp.prefetch(rp));
   else if(window.__rp&&window.__rp.prefetch)window.__rp.prefetch(rp);
   if(!window.__uw||!window.__rp)prefetchDetails();},window.__uw&&window.__rp?400:800);}
-function scope(){const w=S.isOwner?"all":(S.who||"dandy");return S.rows.filter(r=>forMatch(r,w)&&(S.bot==="all"||r.bot===S.bot));}
+function scope(){const w=S.isOwner?"all":(S.who||"dandy");return S.rows.filter(r=>forMatch(r,w));}
 function openQueue(){return scope().filter(r=>r.status==="Open").sort((a,b)=>(isOffer(b)-isOffer(a))||sortKey(a.created).localeCompare(sortKey(b.created)));}
 function navQueue(){const s=scope();const open=openQueue();const fyi=s.filter(r=>r.status==="FYI").sort((a,b)=>sortKey(b.created).localeCompare(sortKey(a.created)));const dec=s.filter(r=>r.status==="Decided").sort((a,b)=>sortKey(b.decidedAt).localeCompare(sortKey(a.decidedAt)));return open.concat(fyi,dec);}
 
@@ -261,8 +261,8 @@ function renderList(){
   const cnt=k=>S.rows.filter(r=>r.status==="Open"&&forMatch(r,k)).length;
   (SOLO?[["irwin","Irwin"]]:[["irwin","Irwin"],["dandy","Dandy"],["all","Everyone"]]).forEach(([k,l])=>seg.append(el("button",{type:"button","aria-pressed":String(w===k),onclick:()=>{S.who=k;save();render();}},`${l} (${cnt(k)})`)));
   const bots=[...new Set(S.rows.map(r=>r.bot).filter(Boolean))].sort();
-  const bc=$("botChips");bc.replaceChildren();bc.hidden=bots.length<2;
-  [["all","All desks"]].concat(bots.map(b=>[b,b])).forEach(([k,l])=>bc.append(el("button",{class:"chip",type:"button","aria-pressed":String(S.bot===k),onclick:()=>{S.bot=k;save();render();}},l)));
+  /* Irwin, Nov 13 11:08 PM: "Remove the desk filter. I have the master account so I will always view all desks." (new hires will later see only their role's tasks) */
+  const bc=$("botChips");bc.replaceChildren();bc.hidden=true;void bots;
   const list=$("list");list.replaceChildren();
   if(S.error)list.append(errorBox(S.error));
   const s=scope();const open=openQueue();
