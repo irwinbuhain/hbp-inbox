@@ -310,10 +310,40 @@ function knownNames(r){const set=new Set();const add=n=>{n=String(n||"").trim();
   const out=[...set];if(r&&isName(r.lead)){const f=String(r.lead).trim().split(/\s+/)[0];if(f.length>=3&&out.indexOf(f)<0)out.push(f);}
   return out.sort((a,b)=>b.length-a.length);}
 /* text → nodes with every known name tappable (blue, copies the full name; a lone first name copies the lead's full name) */
-function withNames(text,r){text=String(text==null?"":text);const L=knownNames(r);if(!text||!L.length)return [text];
-  const esc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");const re=new RegExp("(^|[^A-Za-z\u00C0-\u00FF])("+L.map(esc).join("|")+")(?![A-Za-z\u00C0-\u00FF])","g");
-  const full=r&&isName(r.lead)?String(r.lead).trim():"";const out=[];let last=0,m;
-  while((m=re.exec(text))){const st=m.index+m[1].length;if(st>last)out.push(text.slice(last,st));const n=m[2];out.push(nm(n.indexOf(" ")<0&&full&&full.indexOf(n)===0?full:n,"",n));last=st+n.length;re.lastIndex=last;}
+/* Irwin, Nov 14 10:04 AM: "It missed Anil … make sure it doesn't miss any names" – names were only matched against known leads/buyers, so a buyer
+   mentioned only in a bot's note (Anil Samaroo) stayed plain. Now any run of 2–3 capitalised words that reads like a person's name is tappable too,
+   while places, streets, bots, stages and team words are never treated as names. */
+const NN_STOP=new Set(("Saint St Ave Avenue Street Rd Road Dr Drive Blvd Boulevard Ct Court Ln Lane Pl Place Way Pkwy Parkway Hwy Heights Park Lake Erie Hill Hills Village City County Township Ohio Cleveland Cuyahoga Euclid Lakewood Garfield Maple Bedford Olmsted Parma Shaker Akron Alliance Geneva Glenville Harvard Kinsman Union Broadway Fleet "+
+ "North South East West Upper Lower New Old Big Little Great "+
+ "No Answer Yes Done Skip Change Approve Approved Review Call Calls Text Texts Offer Offers Note Notes Map Seller Sellers Buyer Buyers Agent Agents Realtor Realtors Lead Leads Deal Deals Hold Flip Max Min Final Best Cash Contract Closing Title Earnest Walkthrough Walkthroughs Proof Funds "+
+ "Irwin Dandy Claude Bot Bots Desk Dispo Acquisition Acquisitions Underwriting Inbox Telegram Partner Outreach Listing Listings Report Reports Actions Action Launch Pipeline Stage Nurture Warm Lost Booked Show Negotiating Renegotiate Accepted Sent Draft Drafting Stopped Passed Open Resolved Decided Sequence Wake KPI KPIs "+
+ "Zillow Redfin Realtor InvestorBase Mercury DocuSign Google Gmail Drive Sheets Apify Claude HomeBuyer Plus Home Buyer Homes Properties Property Investments Capital Group Holdings Realty Team Inc Company "+
+ "Monday Tuesday Wednesday Thursday Friday Saturday Sunday Today Tomorrow Yesterday January February March April May June July August September October November December Jan Feb Mar Apr Jun Jul Aug Sep Sept Oct Nov Dec "+
+ "The This That These Those Most Some All Any Each Every Most Many Few Please Thanks Thank Hi Hello Hey Dear Regards Best Sincerely Mr Mrs Ms Dr Sir Madam He She They We You It His Her Their Our And Or But If When Then After Before Also Still Just Only Not").split(/\s+/));
+const NN_STREET=/^(st|street|ave|avenue|rd|road|dr|drive|blvd|boulevard|ct|court|ln|lane|pl|place|way|pkwy|parkway|hwy|ter|terrace|cir|circle)\.?$/i;
+function detectNames(text){const out=[],re=/[A-Za-z\u00C0-\u00FF][A-Za-z\u00C0-\u00FF'’-]*|\d+|[^\sA-Za-z\u00C0-\u00FF\d]+/g;const tk=[];let m;
+  while((m=re.exec(text)))tk.push({w:m[0],s:m.index,e:m.index+m[0].length});
+  const isCap=w=>/^[A-Z\u00C0-\u00DE](?=.*[a-z\u00DF-\u00FF])[A-Za-z\u00C0-\u00FF'’-]+$/.test(w)&&!NN_STOP.has(w.replace(/['’]s$/,""));
+  for(let i=0;i<tk.length;){if(!isCap(tk[i].w)){i++;continue;}
+    let j=i;while(j+1<tk.length&&isCap(tk[j+1].w)&&/^\s+$/.test(text.slice(tk[j].e,tk[j+1].s))&&text.slice(tk[j].e,tk[j+1].s).indexOf("\n")<0)j++;
+    const n=j-i+1,prev=tk[i-1],next=tk[j+1];
+    const afterNum=prev&&/^\d+$/.test(prev.w)&&/^\s+$/.test(text.slice(prev.e,tk[i].s));
+    const beforeStreet=next&&NN_STREET.test(next.w)&&/^\s+$/.test(text.slice(tk[j].e,next.s));
+    if(n>=2&&n<=3&&!afterNum&&!beforeStreet){const nm2=text.slice(tk[i].s,tk[j].e).replace(/['’]s$/,"");if(isName(nm2))out.push([tk[i].s,tk[i].s+nm2.length,nm2]);}
+    i=j+1;}
+  return out;}
+/* text → nodes with every name tappable (blue, copies the full name; a lone first name of this task's lead copies the lead's full name) */
+function withNames(text,r){text=String(text==null?"":text);if(!text)return [text];
+  const full=r&&isName(r.lead)?String(r.lead).trim():"";const hits=[];
+  const L=knownNames(r);if(L.length){const esc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");const re=new RegExp("(^|[^A-Za-z\u00C0-\u00FF])("+L.map(esc).join("|")+")(?![A-Za-z\u00C0-\u00FF])","g");let m;
+    while((m=re.exec(text))){const st=m.index+m[1].length;hits.push([st,st+m[2].length,m[2]]);re.lastIndex=st+m[2].length;}}
+  detectNames(text).forEach(h=>{if(!hits.some(k=>h[0]<k[1]&&k[0]<h[1]))hits.push(h);});
+  /* a first name on its own ("Anil said…") copies that person's full name when the first name points to exactly one known person */
+  const firsts={};L.concat(hits.map(h=>h[2])).forEach(n=>{const p=String(n).split(/\s+/);if(p.length<2)return;const f=p[0];if(f.length<3||NN_STOP.has(f))return;firsts[f]=firsts[f]&&firsts[f]!==n?"!":n;});
+  Object.keys(firsts).forEach(f=>{const fn=firsts[f];if(fn==="!")return;const re=new RegExp("(^|[^A-Za-z\u00C0-\u00FF])("+f.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")(?![A-Za-z\u00C0-\u00FF])","g");let m;
+    while((m=re.exec(text))){const st=m.index+m[1].length,en=st+f.length;if(!hits.some(k=>st<k[1]&&k[0]<en))hits.push([st,en,f,fn]);}});
+  hits.sort((a,b)=>a[0]-b[0]);const out=[];let last=0;
+  hits.forEach(([st,en,n,fn])=>{if(st<last)return;if(st>last)out.push(text.slice(last,st));out.push(nm(fn||(n.indexOf(" ")<0&&full&&full.indexOf(n)===0?full:n),"",n));last=en;});
   if(last<text.length)out.push(text.slice(last));return out;}
 function nm(name,cls,label){const t=String(name||"").trim();if(!t||!isName(t))return el("span",{class:cls||"",text:label||t});
   return el("span",{class:(cls?cls+" ":"")+"cpy",role:"button",title:"Tap to copy the name",text:label||t,onclick:e=>{e.stopPropagation();e.preventDefault();copyName(t);}});}
