@@ -166,7 +166,7 @@ function renderDeals(){
     const num=v=>Number(String(v==null?"":v).replace(/[^0-9.]/g,""))||0;
     const kk=v=>{const n=num(v);if(!n)return "—";return n>=1000?"$"+(Math.round(n/100)/10).toString().replace(/\.0$/,"")+"k":"$"+n;};
     const offers=(d.offers||[]).slice().sort((a,b)=>num(b.amount)-num(a.amount));
-    const contract=d.contract||d.contractPrice||d.purchase||"";
+    const contract=d.contract||d.contractPrice||d.purchase||(()=>{const sh=String(d.short||"").toLowerCase();const lr=(S.rows||[]).find(x=>(d.launchId&&x.botRef==="dl-live-"+d.launchId)||(/^dl-live-/.test(x.botRef||"")&&sh&&String(x.property||"").toLowerCase().includes(sh)));const m=lr&&String(lr.details||"").match(/contract\s*\$([\d,]+)/i);return m?m[1]:"";})();
     const DONE=/^(completed?|walked|showed|done|attended)$/i;const now=new Date();
     let booked=0,done=0;walks.forEach(w=>{const past=(()=>{const t=new Date(String(w.at).replace(" ","T"));return !isNaN(t)&&t<now;})();
       (w.buyers||[]).forEach(b=>{if(/cancel/i.test(b.status||""))return;booked++;if(DONE.test(b.status||"")||(past&&b.status==="Confirmed"))done++;});});
