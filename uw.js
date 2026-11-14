@@ -484,7 +484,7 @@ function dock(rec){
   if(/^waiting/i.test(rec.status||"")){d.append(E("div",{style:"text-align:center;color:#ff9f0a;font-size:13px",text:`${rec.status} – the realtor was asked; it gets re-underwritten as soon as they arrive`}));return d;}
   if(/^pass/i.test(rec.status||"")){const why=String(rec.note||"").replace(/^PASS:?\s*/i,"");d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Passed by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(why&&why!=="PASS"?` · ${why}`:"")}));return d;}
   if((window.__uwPost||(x=>/approv/i.test(x)))(rec.status||"")){const m=/OPENING_OFFER:\s*(\d+)/.exec(rec.note||"");const ov=rec.openingOffer||(m?Number(m[1]):0);
-    d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Approved by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(ov?(/approv/i.test(rec.status||"")?` · opening offer ${$$(ov)} – drafting, you'll approve the text`:` · opening offer ${$$(ov)}`):/OPENING_OFFER:\s*none/.test(rec.note||"")?" · no offer":"")}));return d;}
+    d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Approved by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(ov?(/approv/i.test(rec.status||"")?` · Min ${$$(ov)} added to the offer script`:` · opening offer ${$$(ov)}`):/OPENING_OFFER:\s*none/.test(rec.note||"")?" · no offer":"")}));return d;}
   /* Opening offer: always starts at MIN (Irwin, Nov 6); editable before approving */
   const oi=E("input",{type:"text",inputmode:"numeric",autocomplete:"off","aria-label":"Opening offer",id:"uwOpen",size:"1"});openEl=oi;
   const reset=E("button",{type:"button",class:"oreset",hidden:"",onclick:()=>{openEdited=false;syncOpen();oi.focus();}},"Use MIN");
@@ -511,12 +511,12 @@ function dock(rec){
     if(!api.isOwner()){api.toast("Only Irwin approves underwriting");return;}
     if(hasHold()&&!U._pick){api.toast("Pick Fix & Flip or Buy & Hold first");api.haptic&&api.haptic("err");const hb=$("uwHold");if(hb)hb.scrollIntoView({behavior:"smooth",block:"center"});return;}
     const v=openVal();
-    if(!armed){armed=true;const tx=!!(U.offerTemplate&&U.contact&&U.contact.contactId);ab.textContent=v?(tx?`Tap to confirm · text ${$$(v)} now`:`Tap to confirm · open at ${$$(v)}`):"Tap to confirm · no offer";ab.classList.add("confirm");setTimeout(()=>{armed=false;ab.textContent=(U.offerTemplate&&U.contact)?"Approve & send offer":"Approve underwriting";ab.classList.remove("confirm");},4000);return;}
+    if(!armed){armed=true;const tx=!!(U.offerTemplate&&U.contact&&U.contact.contactId);ab.textContent=v?`Tap to confirm · Min ${$$(v)} to script`:"Tap to confirm · no offer";ab.classList.add("confirm");setTimeout(()=>{armed=false;ab.textContent="Approve";ab.classList.remove("confirm");},4000);return;}
     const mn=(U.offer||{}).min,stg=hasHold()?`\nSTRATEGY: ${U._pick==="hold"?"hold":"flip"}`:"";
     const note=(v?`OPENING_OFFER: ${v}\nOpening offer ${$$(v)}${(typeof mn==="number"&&v!==Math.round(mn))?` (edited by Irwin – MIN was ${$$(mn)})`:" (MIN)"}`:"OPENING_OFFER: none\nApproved with no opening offer")+stg;
     rec.openingOffer=v||0;
-    await decide(rec,"Approve",note);}},"Approve underwriting");
-  if(U.offerTemplate&&U.contact)ab.textContent="Approve & send offer";if(!api.isOwner()){ab.disabled=true;ab.textContent="Irwin approves underwriting";oi.disabled=true;}
+    await decide(rec,"Approve",note);}},"Approve");
+  if(!api.isOwner()){ab.disabled=true;ab.textContent="Irwin approves underwriting";oi.disabled=true;}
   /* Pass on the deal (Irwin, Nov 9): no offer, the bots mark it PASSED */
   const pr=E("textarea",{rows:"1",placeholder:"Why pass? (optional – helps the AI learn)","aria-label":"Reason for passing"});
   let parmed=false;const pc=E("button",{class:"act pass",type:"button",style:"flex:1",onclick:async()=>{if(!parmed){parmed=true;pc.textContent="Tap again to pass · no offer";pc.classList.add("confirm");setTimeout(()=>{parmed=false;pc.textContent="Pass on this deal";pc.classList.remove("confirm");},4000);return;}
@@ -541,7 +541,7 @@ async function decide(rec,decision,note){
   const still=()=>curRec&&curRec.id===rec.id;
   /* Irwin, Nov 9: after approving or changing, go straight to the next underwriting to review */
   setTimeout(()=>{if(!still())return;const q=(window.__uwQueue&&window.__uwQueue())||[];const n=q.find(id=>id!==rec.id);if(sheet)closeSheet();if(n){api.toast("Next underwriting");open(n);}else{api.toast("All underwritings reviewed");close();}},900);
-  try{const r=await api.run("decideUnderwriting",rec.id,decision,note);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");if(r.offer){if(r.offer.sent){api.toast("Offer texted ✓");rec.status="Sent";api.patch&&api.patch("uw",rec.id,{status:"Sent"});cput(rec);if(still())render(rec);}else api.toast("Approved – offer not sent yet, check the inbox");}api.refresh&&api.refresh();}
+  try{const r=await api.run("decideUnderwriting",rec.id,decision,note);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");if(r.offer){if(r.offer.sent){api.toast("Approved ✓");}else api.toast("Approved – Min/Max going to the offer script");}else if(decision==="Approve")api.toast("Approved – Min/Max going to the offer script");api.refresh&&api.refresh();}
   catch(e){rec.status=prev;try{window.__ov&&window.__ov.del("u:"+rec.id);}catch(_){}api.haptic("err");api.toast("Couldn't save – "+(decision==="Approve"?"underwriting not approved":decision==="Pass"?"pass not saved":"change not sent")+", try again");cput(rec);if(still())render(rec);api.patch&&api.patch("uw",rec.id,{status:prev});}
 }
 let opening=false;
