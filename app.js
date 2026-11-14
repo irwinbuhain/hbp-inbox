@@ -190,7 +190,7 @@ function renderDeals(){
       notes.sort((a,b)=>String(b.at||"").localeCompare(String(a.at||"")));
       card.append(el("div",{class:"dsec",text:`💬 What buyers are saying about the deal${notes.length?" · "+notes.length:""}`}));
       if(!notes.length)card.append(el("div",{class:"dnone",text:"Nothing yet"}));
-      notes.forEach(o=>card.append(el("div",{class:"dline"},el("span",{},o.name||"Buyer",el("span",{class:"q",text:(o.quote?"“"+o.quote+"”":"")+(o.at?" · "+shortTime(o.at):"")})),o.price?el("span",{class:"damt",text:"would pay "+money(o.price)}):null)));
+      notes.forEach(o=>card.append(el("div",{class:"dline"},el("span",{},o.name?nm(o.name):"Buyer",el("span",{class:"q",text:(o.quote?"“"+o.quote+"”":"")+(o.at?" · "+shortTime(o.at):"")})),o.price?el("span",{class:"damt",text:"would pay "+money(o.price)}):null)));
       card.append(el("div",{class:"dsec",text:"🗓 Walkthroughs"}));
       if(!walks.length)card.append(el("div",{class:"dnone",text:"No walkthrough time yet – add one once the seller confirms."}));
       walks.forEach(w=>{const ppl=(w.buyers||[]).filter(b=>!/cancel/i.test(b.status||""));
@@ -198,12 +198,12 @@ function renderDeals(){
           el("div",{class:"dtime"},el("span",{},fmtWalk(w.at)+" ",w.note?el("small",{text:"· "+w.note}):null),
             w.pending?el("span",{class:"dpend",text:"saving…"}):w.cancelling?el("span",{class:"dpend",text:"cancelling…"}):
             (isDispo()?el("button",{class:"dx",type:"button",onclick:()=>dsSave(r,{cancel:{at:w.at}},"Cancelling that time")},"Cancel"):null)),
-          el("div",{class:"dppl"},...(ppl.length?ppl.map(b=>{const ok=b.status==="Confirmed"||DONE.test(b.status||"");return el("span",{class:"dp"+(ok?" ok":""),text:(DONE.test(b.status||"")?"✓✓ ":ok?"✓ ":"")+b.name});}):[el("span",{class:"dnone",text:"No buyers booked yet"})]))));});
-      const wt=(d.waiting||[]);if(wt.length)card.append(el("div",{class:"dslot"},el("div",{class:"dtime"},el("span",{},"Want to walk – no time yet ",el("small",{text:"· add a time and I'll book them"}))),el("div",{class:"dppl"},...wt.map(b=>el("span",{class:"dp",text:b.name})))));
+          el("div",{class:"dppl"},...(ppl.length?ppl.map(b=>{const ok=b.status==="Confirmed"||DONE.test(b.status||"");return el("span",{class:"dp"+(ok?" ok":"")},(DONE.test(b.status||"")?"✓✓ ":ok?"✓ ":""),nm(b.name));}):[el("span",{class:"dnone",text:"No buyers booked yet"})]))));});
+      const wt=(d.waiting||[]);if(wt.length)card.append(el("div",{class:"dslot"},el("div",{class:"dtime"},el("span",{},"Want to walk – no time yet ",el("small",{text:"· add a time and I'll book them"}))),el("div",{class:"dppl"},...wt.map(b=>el("span",{class:"dp"},nm(b.name))))));
       if(isDispo())card.append(el("button",{class:"dadd",type:"button",onclick:()=>openWalkAdd(r)},"+ Add walkthrough time"));
       card.append(el("div",{class:"dsec",text:`💰 Offers – highest first${offers.length?" · "+offers.length:""}`}));
       if(!offers.length)card.append(el("div",{class:"dnone",text:"No offers yet"}));
-      offers.forEach(o=>card.append(el("div",{class:"dline"},el("span",{},o.name||"Buyer",el("span",{class:"q",text:[shortTime(o.at),o.status,o.note].filter(Boolean).join(" · ")})),el("span",{class:"damt",text:money(o.amount)}))));
+      offers.forEach(o=>card.append(el("div",{class:"dline"},el("span",{},o.name?nm(o.name):"Buyer",el("span",{class:"q",text:[shortTime(o.at),o.status,o.note].filter(Boolean).join(" · ")})),el("span",{class:"damt",text:money(o.amount)}))));
     }
     list.append(card);});
 }
@@ -294,13 +294,22 @@ function uwRow(u){
       el("span",{class:"rprev",text:[u.type,u.grade&&u.grade!=="unknown"?"Grade "+u.grade:"",u.comps?u.comps+" comps":""].filter(Boolean).join(" · ")}),
       el("span",{class:"rtag"},el("b",{text:`ARV ${kfmt(u.arv)} · Rehab ${kfmt(u.rehab)} · `}),el("span",{class:Number(u.max)<0?"negt":"",text:`MIN ${kfmt(u.min)} / MAX ${kfmt(u.max)}`}))));
 }
+
+/* Irwin, Nov 14 2026 9:51 AM: "Make it so that every name that's in GHL that is referenced in the Telegram app is clickable. And when clicked the full name is copied automatically. So it's easy to find them in GHL" */
+(function(){try{const st=document.createElement("style");st.textContent=".cpy{cursor:copy;text-decoration:underline dotted rgba(235,235,245,.45);text-underline-offset:3px;-webkit-tap-highlight-color:transparent}.cpy:active{opacity:.6}";document.head.appendChild(st);}catch(e){}})();
+function copyName(t){t=String(t||"").trim();if(!t)return;
+  const done=()=>{try{haptic("ok");}catch(e){}toast(`Copied “${t}”`);};
+  const legacy=()=>{try{const a=document.createElement("textarea");a.value=t;a.setAttribute("readonly","");a.style.cssText="position:fixed;top:0;left:0;opacity:0";document.body.appendChild(a);a.select();a.setSelectionRange(0,t.length);const ok=document.execCommand("copy");a.remove();ok?done():toast(t);}catch(e){toast(t);}};
+  try{if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,legacy);else legacy();}catch(e){legacy();}}
+function nm(name,cls,label){const t=String(name||"").trim();if(!t)return el("span",{class:cls||"",text:label||""});
+  return el("span",{class:(cls?cls+" ":"")+"cpy",role:"button",title:"Tap to copy the name",text:label||t,onclick:e=>{e.stopPropagation();e.preventDefault();copyName(t);}});}
 function rowEl(r,unread){
   const prev=r.status==="Decided"?`You: ${r.decision}${r.note?` – ${r.note}`:""}`:(r.headline||r.message||"");
   return el("button",{class:"row",type:"button",onclick:()=>openThread(r.id)},
     el("span",{class:"dot"},unread?el("i"):null),
     el("span",{class:avClass(r),"aria-hidden":"true",text:initials(r)}),
     el("span",{class:"rtext"},
-      el("span",{class:"rline"},el("span",{class:"rname",text:title(r)}),el("span",{class:"rtime",text:shortTime(r.created)})),
+      el("span",{class:"rline"},r.lead?nm(r.lead,"rname"):el("span",{class:"rname",text:title(r)}),el("span",{class:"rtime",text:shortTime(r.created)})),
       el("span",{class:"rprev",text:prev}),
       el("span",{class:"rtag"},isOffer(r)&&money(r.amount)?el("b",{text:money(r.amount)+" · "}):null,`${r.bot||""}${r.property&&r.lead?" · "+r.property:""}`)));
 }
@@ -349,12 +358,12 @@ function renderThread(){
   const q=navQueue();const i=q.findIndex(x=>x.id===r.id);
   $("backLbl").textContent=openQueue().length?String(openQueue().length):"Inbox";
   $("pos").textContent=i>=0?`${i+1} of ${q.length}`:"";
-  $("who").replaceChildren(el("span",{class:avClass(r),text:initials(r)}),el("span",{class:"n",text:`${title(r)} ›`}));
+  $("who").replaceChildren(el("span",{class:avClass(r),text:initials(r)}),r.lead?el("span",{class:"n"},nm(r.lead),"\u00a0›"):el("span",{class:"n",text:`${title(r)} ›`}));
   const m=$("msgs");m.replaceChildren();
   m.append(el("div",{class:"stamp"},el("b",{text:r.bot||"Bot"}),` · ${r.id} · ${longTime(r.created)}`));
   if(r.property||r.phone)m.append(el("div",{class:"sys",text:[r.property,r.phone].filter(Boolean).join(" · ")}));
   if(r.headline)m.append(el("div",{class:"sys"},el("strong",{text:r.headline})));
-  if(r.message){m.append(el("div",{class:"sec",text:`Message from ${r.lead||"them"}`}));m.append(el("div",{class:"b in",text:r.message}));}
+  if(r.message){m.append(el("div",{class:"sec"},"Message from ",r.lead?nm(r.lead):"them"));m.append(el("div",{class:"b in",text:r.message}));}
   if(r.details){m.append(el("div",{class:"sec",text:isOffer(r)?"Underwriting & history":"Notes"}));m.append(notesCard(r.details));}
   const uwr=uwFor(r);if(uwr)m.append(el("button",{class:"uwopen",type:"button",onclick:()=>window.__uw&&window.__uw.open(uwr.id)},el("span",{},el("b",{text:"Review underwriting"}),el("small",{},`Map · ${uwr.comps||""} comps · repair list`,uwr.status?el("span",{style:`color:${uwColor(uwr.status)};font-weight:600`,text:" · "+uwr.status}):null)),el("span",{class:"chev",text:"›"})));
   if(r.link)m.append(el("a",{class:"linkb",href:r.link,target:"_blank",rel:"noopener",text:"Open link ↗"}));
