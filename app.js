@@ -174,6 +174,7 @@ function renderDeals(){
           w.pending?el("span",{class:"dpend",text:"saving…"}):w.cancelling?el("span",{class:"dpend",text:"cancelling…"}):
           (isDispo()?el("button",{class:"dx",type:"button",onclick:()=>dsSave(r,{cancel:{at:w.at}},"Cancelling that time")},"Cancel"):null)),
         el("div",{class:"dppl"},...(ppl.length?ppl.map(b=>el("span",{class:"dp"+(b.status==="Confirmed"?" ok":""),text:(b.status==="Confirmed"?"✓ ":"")+b.name})):[el("span",{class:"dnone",text:"No buyers booked yet"})]))));});
+    const wt=(d.waiting||[]);if(wt.length)card.append(el("div",{class:"dslot"},el("div",{class:"dtime"},el("span",{},"Want to walk – no time yet ",el("small",{text:"· add a time and I'll book them"}))),el("div",{class:"dppl"},...wt.map(b=>el("span",{class:"dp",text:b.name})))));
     if(isDispo())card.append(el("button",{class:"dadd",type:"button",onclick:()=>openWalkAdd(r)},"+ Add walkthrough time"));
     const offers=(d.offers||[]).slice().sort((a,b)=>Number(String(b.amount).replace(/[^0-9.]/g,""))-Number(String(a.amount).replace(/[^0-9.]/g,"")));
     card.append(el("div",{class:"dsec",text:`💰 Offers${offers.length?" · "+offers.length:""}`}));
