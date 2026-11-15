@@ -136,7 +136,7 @@ function syncBack(){try{if(TG&&TG.BackButton){if(S.view==="thread"&&S.cur)TG.Bac
 function errorBox(e){const m=String((e&&e.message)||e||"");const t=/NOT_ALLOWED/.test(m)?["Not allowed","This inbox is only for Irwin and Dandy."]:/NOT_TELEGRAM|BAD_SIGNATURE|EXPIRED/.test(m)?["Open this from Telegram","Use the Open inbox button on a bot alert in Telegram."]:["Couldn't reach the inbox","Tap Refresh to try again."];return el("div",{class:"banner"},el("b",{text:t[0]}),t[1],el("div",{style:"opacity:.6;font-size:12px;margin-top:6px",text:"Code: "+m.replace(/^Error:\s*/,"").slice(0,160)}));}
 function modeSeg(){
   let ms=$("modeSeg");if(!ms){ms=el("div",{class:"seg",id:"modeSeg",style:"margin-bottom:8px"});$("whoSeg").before(ms);}
-  const openSug=(S.reports||[]).reduce((n,r)=>n+(Number(r.open)||0),0);
+  const openSug=0; // report suggestions removed (Irwin, Nov 14 2026)
   const nd=(S.deals||[]).length;ms.replaceChildren(...[["tasks","Tasks"],["deals",`Deals${nd?" · "+nd:""}`],["reports",`Reports${openSug?" · "+openSug:""}`]].map(([k,l])=>el("button",{type:"button","aria-pressed":String((S.mode||"tasks")===k),onclick:()=>{S.mode=k;haptic();render();}},l)));
 }
 /* Irwin, Nov 13 9:53 PM: "Lets add a deal status section ... Each property under contract will get one. It will show whose walking
@@ -252,11 +252,11 @@ function renderReports(){
   window.__rpNextOpen=(cur,skip)=>{const byId={};(S.reports||[]).forEach(r=>byId[r.id]=r);const i=ord.indexOf(cur);const after=ord.slice(i+1).concat(ord.slice(0,Math.max(0,i)));return after.find(id=>Number((byId[id]||{}).open)>0&&!(skip&&skip.has(id)))||null;};
   Object.keys(groups).sort().reverse().forEach(d=>{list.append(el("div",{class:"sect",text:d===today?"Today":d}));
     groups[d].forEach(r=>list.append(el("button",{class:"row",type:"button",onclick:()=>window.__rp&&window.__rp.open(r.id)},
-      el("span",{class:"dot"},Number(r.open)>0?el("i"):null),
+      el("span",{class:"dot"},null),
       el("span",{class:"av",text:String(r.bot||"?").replace(/[^A-Za-z ]/g,"").split(/\s+/).map(w=>w[0]||"").join("").slice(0,2).toUpperCase()}),
       el("span",{class:"rtext"},el("span",{class:"rline"},el("span",{class:"rname",text:`${r.bot} – ${r.title}`}),el("span",{class:"rtime",text:shortTime(r.created)})),
         el("span",{class:"rprev",text:(r.kpis||[]).map(k=>`${k.label} ${k.value}${k.unit&&k.unit!=="$"?k.unit:""}`).join(" · ")}),
-        Number(r.open)>0?el("span",{class:"rtag"},el("b",{text:`${r.open} suggestion${r.open>1?"s":""} to review`})):null))));});
+        null))));});
 }
 function renderList(){
   modeSeg();

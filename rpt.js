@@ -47,7 +47,8 @@ function render(){if(R&&R.id)cput(R);
   if((d.kpis||[]).length)body.append(E("div",{class:"kgrid"},...d.kpis.map(kpiTile)));
   if(d.summary)body.append(E("div",{class:"rsec",text:"Summary"}),E("div",{class:"rcard",text:d.summary}));
   (d.sections||[]).forEach(s=>{if(!(s.lines||[]).length)return;body.append(E("div",{class:"rsec",text:s.title}),E("div",{class:"rcard"},...s.lines.map(l=>E("div",{class:"ln",text:l}))));});
-  const sug=d.suggestions||[];
+  /* Irwin, Nov 14 2026 9:04 PM: "can we remove suggestions in the reports. If I need to fix something I will message you directly" – suggestions are no longer shown */
+  const sug=[];
   if(sug.length){body.append(E("div",{class:"rsec",text:"💡 Suggestions"}));sug.forEach(s=>body.append(sugCard(s,acts.find(a=>a.kind==="Suggestion"&&a.text===s.text))));}
   const ins=acts.filter(a=>a.kind==="Instruction");
   if(ins.length){body.append(E("div",{class:"rsec",text:"Your instructions to Claude"}));ins.forEach(a=>body.append(E("div",{class:"act"},E("div",{class:"k"},a.when,E("span",{class:"pill "+stClass(a.status),text:a.status})),E("div",{text:a.text}),a.result?E("div",{class:"r",text:a.result}):null)));}
