@@ -422,7 +422,9 @@ async function addLine(line){
   const api=window.__uwApi;const snap=JSON.stringify(U);
   const l=Object.assign({},line,{added:{by:api.me(),at:"now",reason:line.reason}});l.source=l.source||"Added by Irwin";const isNew=!l.fromList;
   U.rehab=U.rehab||{lines:[],total:0};U.rehab.lines=U.rehab.lines||[];U.rehab.lines.push(l);recalc(U);
-  closeSheet();api.haptic("ok");api.toast(`Added – rehab now ${$$(U.rehab.total)}`);refreshNumbers();
+  /* Irwin, Nov 14 2026 8:59 PM: stay on the add-repair page after adding, with the new repair showing */
+  const onAdd=()=>!!(sheet&&sheet.isConnected&&(sheet.querySelector("b")||{}).textContent==="Add a repair");
+  addRepairSheet(addPhotoAt);api.haptic("ok");api.toast(`Added ${l.item} – rehab now ${$$(U.rehab.total)}`);refreshNumbers();
   delete l.fromList;try{const r=await api.run("editRepair",curRec.id,-1,l.item,"add",l.reason,l.cost,JSON.stringify(Object.assign({fromList:!isNew},l)));
     if(r&&r.ok&&r.data){curRec.data=r.data;U=r.data;refreshNumbers();if(isNew){repOpts=null;api.toast(`Added – "${line.item}" saved to your repair options`);}return;}
     if(r&&String(r.reason)==="IRWIN_ONLY")throw new Error("IRWIN_ONLY");
@@ -430,7 +432,7 @@ async function addLine(line){
     const note=`Add this repair line exactly as I entered it (keep it – my edit is final): ${l.area} – ${l.item} – $${l.cost}. Why: ${l.reason}.`+(l.photo?` Photo: ${l.photo} (${l.photoNote}).`:"");
     const c=await api.run("decideUnderwriting",curRec.id,"Change",note);if(!c||!c.ok)throw new Error((c&&c.reason)||"failed");
     api.toast("Saved – the Underwriting AI adds it to the budget on its next run");curRec.status="Change requested";api.refresh&&api.refresh();}
-  catch(e){const d=JSON.parse(snap);curRec.data=d;U=d;api.haptic("err");api.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can change the repair budget":"Couldn't save – try again");refreshNumbers();}
+  catch(e){const d=JSON.parse(snap);curRec.data=d;U=d;api.haptic("err");if(onAdd())addRepairSheet(addPhotoAt);api.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can change the repair budget":"Couldn't save – try again");refreshNumbers();}
 }
 function repairLines(){const lines=(U.rehab&&U.rehab.lines)||[];const order=[];const g={};lines.forEach(l=>{const a=l.area||"Other";if(!g[a]){g[a]=[];order.push(a);}g[a].push(l);});return order.flatMap(a=>g[a]);}
 function repairBody(l){return[
