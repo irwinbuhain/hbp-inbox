@@ -97,7 +97,10 @@ const css=`
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}.pgrid button{position:relative;padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:#000;aspect-ratio:4/3}.pgrid button img,.pgrid button .noimg{width:100%;height:100%;object-fit:cover;display:block}.pgrid button[aria-pressed=true]{border-color:#0a84ff}.pgrid button[aria-pressed=true]::after{content:"✓";position:absolute;top:4px;right:4px;background:#0a84ff;color:#fff;border-radius:50%;width:22px;height:22px;font:700 14px/22px system-ui;text-align:center}.pgrid .pn{position:absolute;left:4px;bottom:3px;color:#fff;font:600 11px system-ui;text-shadow:0 1px 2px #000}
 .pzoom{display:block;margin:8px 0 0;background:none;border:0;color:#7fb2ff;font:14px system-ui;padding:0}
 .rl .added{color:#7fb2ff;font-size:12px;font-weight:600}
-.rlist{margin-top:6px}.ropt{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;background:#1c1c1e;border:0;border-radius:12px;color:#fff;padding:12px;margin-top:6px;font:15px system-ui;text-align:left}.ropt b{color:#e3b341;white-space:nowrap}.ropt .yours{margin-left:8px;background:#0a1f3d;color:#7fb2ff;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:600}
+.rlist{margin-top:6px}.ropt{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;background:#1c1c1e;border:0;border-radius:12px;color:#fff;padding:12px;margin-top:6px;font:15px system-ui;text-align:left}.ropt b{color:#e3b341;white-space:nowrap}.ropt.dup{opacity:.6}.ropt .inb{margin-left:8px;background:#3a2a05;color:#e3b341;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:600}
+.onph{margin:2px 0 8px;background:#1c1c1e;border-radius:10px;padding:8px 10px;color:#e5e5ea;font-size:13px}.onph b{color:#e3b341}
+.already{margin-top:6px;background:#1c1c1e;border-radius:12px;padding:10px 12px}.already summary{color:#e5e5ea;font:600 14px system-ui;cursor:pointer}.alr{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:14px;color:#e5e5ea}.alr img,.alr .noimg{width:44px;height:33px;object-fit:cover;border-radius:6px;flex:none;background:#000}.alr span{flex:1}.alr b{color:#e3b341}
+.rpph .rbig{margin-top:0}.ropt .yours{margin-left:8px;background:#0a1f3d;color:#7fb2ff;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:600}
 .rpick{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#000;border-radius:12px;padding:10px 12px}.rpick b{font-size:17px}.rpick .lbl{margin-bottom:2px}.rpick .rs{color:#8e8e93;font-size:13px;margin-top:2px}
 .rmd{margin-top:14px;background:#2c1a17;border:1px solid #5a2a24;border-radius:14px;padding:12px;color:#ffd7d2;font-size:14px}.rmd b{display:block;color:#ff6961;margin-bottom:4px}
 .pnav{display:flex;align-items:center;justify-content:space-between;margin:18px 0 6px;color:#8e8e93;font-size:13px}
@@ -120,6 +123,7 @@ const css=`
 .car{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:6px;scrollbar-width:none;border-radius:14px}
 .car::-webkit-scrollbar{display:none}
 .car img{flex:none;width:100%;height:58vw;max-height:340px;object-fit:cover;scroll-snap-align:center;border-radius:14px;background:#1c1c1e}
+.car>.noimg{flex:none;width:100%;height:58vw;max-height:340px;scroll-snap-align:center;border-radius:14px;background:#1c1c1e;display:flex;align-items:center;justify-content:center;color:#8e8e93}
 .carn{text-align:center;color:#8e8e93;font-size:12px;margin:6px 0}
 .sheet{position:fixed;inset:0;z-index:30;background:#000;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .4s cubic-bezier(.32,.72,0,1)}
 .sheet.on{transform:none}
@@ -353,47 +357,65 @@ const AREAS=["Exterior","Interior","Kitchen","Bath","Mechanicals","Other","Gentr
 /* Irwin, Nov 14 2026 8:12 PM: "Make the repairs easier for me to select. Have it able to select from the items on my repair cheat sheet. And also give me the option to add something thats not on the cheat sheet. Anything that I add that is not on the cheat sheet save it in the options of repairs" */
 let repOpts=null;
 async function loadRepOpts(){if(repOpts)return repOpts;const r=await window.__uwApi.run("getRepairOptions");if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");repOpts=r.options||[];return repOpts;}
-function addRepairSheet(){
+/* Irwin, Nov 14 2026 8:32 PM: "Have it so I can scroll through the images first. And as I scroll through the images, below the images it gives me the options of repairs. Also show what repairs have already been added so we can avoid duplicate repairs" */
+let addPhotoAt=0;
+const normItem=x=>String(x||"").toLowerCase().replace(/\(\d+\)/g,"").replace(/[^a-z0-9]+/g," ").trim();
+function addRepairSheet(startAt){
   const api=window.__uwApi;if(!api.isOwner()){api.toast("Only Irwin can change the repair budget");return;}
+  const photos=((U.subject||{}).photos||[]).filter(Boolean);if(typeof startAt==="number")addPhotoAt=startAt;if(addPhotoAt>=photos.length)addPhotoAt=0;
+  const have=((U.rehab&&U.rehab.lines)||[]).filter(l=>!l.removed);
+  const haveKeys=new Set(have.map(l=>normItem(l.item)));
+  /* photos first – swipe through them; the photo showing is the one the repair is tied to */
+  const car=E("div",{class:"car"},...photos.map((u,i)=>pimg(u,{loading:Math.abs(i-addPhotoAt)<2?"eager":"lazy",alt:`Photo ${i+1}`,onclick:()=>lightbox(u,`Photo ${i+1} of ${photos.length}`,photos,i)})));
+  const cnt=E("div",{class:"carn"});
+  const onPhoto=E("div",{});
+  const paintPhoto=()=>{cnt.textContent=photos.length?`Photo ${addPhotoAt+1} of ${photos.length} · swipe for more · tap to enlarge`:"No listing photos on this deal";
+    const here=have.filter(l=>l.photo&&l.photo===photos[addPhotoAt]);
+    onPhoto.replaceChildren(...(here.length?[E("div",{class:"onph"},E("b",{text:"Already on this photo: "}),here.map(l=>`${l.item} ${$$(l.cost)}`).join(" · "))]:[]));};
+  const nearest=()=>{let b=0,d=1e9;[...car.children].forEach((el,i)=>{const x=Math.abs(el.offsetLeft-car.offsetLeft-car.scrollLeft);if(x<d){d=x;b=i;}});return b;};
+  car.addEventListener("scroll",()=>requestAnimationFrame(()=>{if(!car.isConnected||!car.clientWidth)return;const n=nearest();if(n!==addPhotoAt){addPhotoAt=n;paintPhoto();}}),{passive:true});
+  setTimeout(()=>{const el=car.children[addPhotoAt];if(el)car.scrollLeft=el.offsetLeft-car.offsetLeft;paintPhoto();},0);
+  /* what's already in the budget, so nothing gets added twice */
+  const already=E("details",{class:"already"},E("summary",{},`Already in the budget · ${have.length} repair${have.length===1?"":"s"} · ${$$(have.reduce((a,l)=>a+(Number(l.cost)||0),0))}`),
+    ...(have.length?have.map(l=>E("div",{class:"alr"},l.photo?pimg(l.photo,{loading:"lazy",alt:""}):E("div",{class:"noimg"}),E("span",{text:`${l.item}`}),E("b",{text:$$(l.cost)}))):[E("div",{class:"carn",text:"Nothing yet"})]));
+  if(have.length&&have.length<=6)already.setAttribute("open","");
   const box=E("div",{class:"rlist"},E("div",{class:"carn",text:"Loading your repair list…"}));
   const q=E("input",{class:"txt",type:"search",placeholder:"Search repairs (e.g. roof, paint)","aria-label":"Search repairs"});
-  const other=E("button",{class:"addrep",type:"button",onclick:()=>repairDetails(null,q.value.trim())},"+ Something not on the list");
-  openSheet("Add a repair",[E("div",{class:"rform",style:"margin-top:0"},q),box,other]);
+  const other=E("button",{class:"addrep",type:"button",onclick:()=>repairDetails(null,q.value.trim(),photos.length?addPhotoAt:-1)},"+ Something not on the list");
+  openSheet("Add a repair",[photos.length?car:null,cnt,onPhoto,already,E("div",{class:"lbl",style:"margin:14px 0 6px;color:#8e8e93;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.4px",text:"What does this photo need?"}),E("div",{class:"rform",style:"margin-top:0;padding:8px"},q),box,other]);
   const paint=()=>{const k=q.value.trim().toLowerCase();const L=(repOpts||[]).filter(o=>!k||(o.item+" "+o.area).toLowerCase().includes(k));
     const g={},order=[];L.forEach(o=>{if(!g[o.area]){g[o.area]=[];order.push(o.area);}g[o.area].push(o);});
-    box.replaceChildren(...(L.length?order.flatMap(a=>[E("div",{class:"grp"},E("span",{text:a})),...g[a].map(o=>E("button",{class:"ropt",type:"button",onclick:()=>repairDetails(o)},
-      E("span",{class:"on"},o.item,o.custom?E("span",{class:"yours",text:"yours"}):null),E("b",{text:$$(o.cost)+(o.per?" / "+o.per.replace(/^each$/,"ea"):"")})))]):[E("div",{class:"carn",text:k?`Nothing on your list matches "${q.value.trim()}" – tap "Something not on the list"`:"Your repair list is empty"})]));};
+    box.replaceChildren(...(L.length?order.flatMap(a=>[E("div",{class:"grp"},E("span",{text:a})),...g[a].map(o=>{const ok_=normItem(o.item);const dup=[...haveKeys].some(h=>h===ok_||(ok_.length>3&&(` ${h} `).includes(` ${ok_} `)));return E("button",{class:"ropt"+(dup?" dup":""),type:"button",onclick:()=>{if(dup&&!confirmDup(o))return;repairDetails(o,"",photos.length?addPhotoAt:-1);}},
+      E("span",{class:"on"},o.item,o.custom?E("span",{class:"yours",text:"yours"}):null,dup?E("span",{class:"inb",text:"already added"}):null),E("b",{text:$$(o.cost)+(o.per?" / "+o.per.replace(/^each$/,"ea"):"")}));})]):[E("div",{class:"carn",text:k?`Nothing on your list matches "${q.value.trim()}" – tap "Something not on the list"`:"Your repair list is empty"})]));};
   q.addEventListener("input",paint);
   loadRepOpts().then(paint).catch(()=>{box.replaceChildren(E("div",{class:"carn",text:"Couldn't load your repair list – you can still add one below"}));});
 }
-function repairDetails(opt,typed){
-  const photos=((U.subject||{}).photos||[]).filter(Boolean);let area=opt?opt.area:"",pick=-1;const each=!!(opt&&/each|ea/i.test(opt.per||""));
+let dupOk="";
+function confirmDup(o){if(dupOk===o.item)return true;dupOk=o.item;window.__uwApi.toast(`"${o.item}" is already in the budget – tap again to add another`);return false;}
+function repairDetails(opt,typed,photoAt){
+  const photos=((U.subject||{}).photos||[]).filter(Boolean);let area=opt?opt.area:"",pick=(typeof photoAt==="number"&&photoAt>=0&&photoAt<photos.length)?photoAt:-1;const each=!!(opt&&/each|ea/i.test(opt.per||""));
   const areas=E("div",{class:"areas"},...AREAS.map(a=>E("button",{type:"button","aria-pressed":String(a===area),onclick:ev=>{area=a;[...areas.children].forEach(b=>b.setAttribute("aria-pressed",String(b===ev.currentTarget)));upd();}},a)));
   const item=E("input",{class:"txt",type:"text",placeholder:"What needs work? e.g. Replace back porch steps","aria-label":"Repair item"});if(opt)item.value=opt.item;else if(typed)item.value=typed;
   const qty=figNum("1","How many");if(each)qty.value="1";
   const cost=figNum("0","Repair cost");if(opt)cost.value=String(opt.cost);
   qty.addEventListener("input",()=>{const n=qty.val();if(n&&opt){cost.value=String(n*opt.cost);}upd();});
   const why=E("textarea",{rows:"2",placeholder:"Why does it need this? (the AI learns from this)"});
-  const big=E("div",{});
-  const grid=E("div",{class:"pgrid"},...photos.map((u,i)=>E("button",{type:"button","aria-pressed":"false","aria-label":`Photo ${i+1}`,onclick:()=>{pick=pick===i?-1:i;[...grid.children].forEach((b,k)=>b.setAttribute("aria-pressed",String(k===pick)));
-      big.replaceChildren(...(pick<0?[]:[pimg(photos[pick],{class:"rbig",alt:"Selected photo",onclick:()=>lightbox(photos[pick],`Photo ${pick+1} of ${photos.length}`,photos,pick)}),E("div",{class:"carn",text:`Photo ${pick+1} of ${photos.length} selected · tap to enlarge`})]));upd();}},
-    pimg(u,{loading:"lazy",alt:""}),E("span",{class:"pn",text:String(i+1)}))));
+  const big=pick>=0?E("div",{class:"rpph"},pimg(photos[pick],{class:"rbig",alt:"Selected photo",onclick:()=>lightbox(photos[pick],`Photo ${pick+1} of ${photos.length}`,photos,pick)}),E("div",{class:"carn",text:`Photo ${pick+1} of ${photos.length} – tied to this repair`}),E("button",{type:"button",class:"pzoom",onclick:()=>addRepairSheet(pick)},"Change photo")):null;
   const save=E("button",{class:"rbtn edit",type:"button",disabled:""},"Add repair");
   function upd(){const c=cost.val();const ok=area&&item.value.trim()&&c!=null&&c>0&&why.value.trim()&&(pick>=0||!photos.length);save.disabled=!ok;save.textContent=c?`Add ${$$(c)} repair`:"Add repair";}
   [item,cost,why].forEach(x=>x.addEventListener("input",upd));
   save.addEventListener("click",()=>{if(save.disabled)return;const n=each?qty.val():null;const it=item.value.trim()+(n&&n>1?` (${n})`:"");
     const isNew=!opt||opt.item.toLowerCase()!==item.value.trim().toLowerCase();
     addLine({area,item:it,cost:cost.val(),reason:why.value.trim(),photo:pick>=0?photos[pick]:"",photoNote:pick>=0?`Photo ${pick+1} of ${photos.length} – picked by Irwin`:"",fromList:!isNew,per:isNew?"":(opt.per||""),source:isNew?"Added by Irwin":(opt.source||"Repair Cheat Sheet")+" – picked by Irwin"});});
-  const head=opt?E("div",{class:"rpick"},E("div",{},E("div",{class:"lbl",text:opt.area}),E("b",{text:opt.item}),E("div",{class:"rs",text:`${$$(opt.cost)}${opt.per?" / "+opt.per:""} · ${opt.custom?"your item":"cheat sheet"}`})),E("button",{type:"button",class:"pzoom",onclick:addRepairSheet},"Change")):
+  const head=opt?E("div",{class:"rpick"},E("div",{},E("div",{class:"lbl",text:opt.area}),E("b",{text:opt.item}),E("div",{class:"rs",text:`${$$(opt.cost)}${opt.per?" / "+opt.per:""} · ${opt.custom?"your item":"cheat sheet"}`})),E("button",{type:"button",class:"pzoom",onclick:()=>addRepairSheet(pick>=0?pick:undefined)},"Change")):
     E("div",{class:"carn",style:"text-align:left",text:"Not on your list yet – it gets saved to your repair options so you can pick it next time."});
-  openSheet("Add a repair",[E("div",{class:"rform",style:"margin-top:0"},head,
+  openSheet("Add a repair",[big,E("div",{class:"rform",style:"margin-top:"+(big?"10px":"0")},head,
     opt?null:E("div",{class:"lbl",style:"margin-top:12px",text:"Area"}),opt?null:areas,
     opt?null:E("div",{class:"lbl",style:"margin-top:12px",text:"Repair"}),opt?null:item,
     each?E("div",{class:"lbl",style:"margin-top:12px",text:`How many (${$$(opt.cost)} each)`}):null,each?E("div",{class:"money"},qty):null,
     E("div",{class:"lbl",style:"margin-top:12px",text:"Cost"}),E("div",{class:"money"},E("span",{text:"$"}),cost),
     E("div",{class:"lbl",style:"margin-top:12px",text:"Why it needs work"}),why,
-    E("div",{class:"lbl",style:"margin-top:12px",text:photos.length?"Pick the photo that shows it":"No listing photos on this deal"}),
-    photos.length?grid:null,big,save,E("button",{class:"rcancel",type:"button",onclick:addRepairSheet},"Back to the list"))]);
+    save,E("button",{class:"rcancel",type:"button",onclick:()=>addRepairSheet(pick>=0?pick:undefined)},"Back to the photos"))]);
   upd();setTimeout(()=>(opt?why:item).focus(),300);
 }
 async function addLine(line){
