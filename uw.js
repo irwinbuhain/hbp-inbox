@@ -98,6 +98,8 @@ const css=`
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}.pgrid button{position:relative;padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:#000;aspect-ratio:4/3}.pgrid button img,.pgrid button .noimg{width:100%;height:100%;object-fit:cover;display:block}.pgrid button[aria-pressed=true]{border-color:#0a84ff}.pgrid button[aria-pressed=true]::after{content:"✓";position:absolute;top:4px;right:4px;background:#0a84ff;color:#fff;border-radius:50%;width:22px;height:22px;font:700 14px/22px system-ui;text-align:center}.pgrid .pn{position:absolute;left:4px;bottom:3px;color:#fff;font:600 11px system-ui;text-shadow:0 1px 2px #000}
 .pzoom{display:block;margin:8px 0 0;background:none;border:0;color:#7fb2ff;font:14px system-ui;padding:0}
 .rl .added{color:#7fb2ff;font-size:12px;font-weight:600}
+.act.txo{background:#0a1f3d;color:#7fb2ff;border:1px solid #1f4f99}
+.rbtn.edit.confirm{background:#ff9f0a;color:#000}
 .rlist{margin-top:6px}.ropt{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;background:#1c1c1e;border:0;border-radius:12px;color:#fff;padding:12px;margin-top:6px;font:15px system-ui;text-align:left}.ropt b{color:#e3b341;white-space:nowrap}.ropt.dup{opacity:.6}.ropt .inb{margin-left:8px;background:#3a2a05;color:#e3b341;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:600}
 .onph{margin:2px 0 8px;background:#1c1c1e;border-radius:10px;padding:8px 10px;color:#e5e5ea;font-size:13px}.onph b{color:#e3b341}
 .already{margin-top:6px;background:#1c1c1e;border-radius:12px;padding:10px 12px}.already summary{color:#e5e5ea;font:600 14px system-ui;cursor:pointer}.alr{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:14px;color:#e5e5ea}.alr img,.alr .noimg{width:44px;height:33px;object-fit:cover;border-radius:6px;flex:none;background:#000}.alr span{flex:1}.alr b{color:#e3b341}
@@ -580,7 +582,8 @@ function dock(rec){
   if(/^waiting/i.test(rec.status||"")){d.append(E("div",{style:"text-align:center;color:#ff9f0a;font-size:13px",text:`${rec.status} – the realtor was asked; it gets re-underwritten as soon as they arrive`}));return d;}
   if(/^pass/i.test(rec.status||"")){const why=String(rec.note||"").replace(/^PASS:?\s*/i,"");d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Passed by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(why&&why!=="PASS"?` · ${why}`:"")}));return d;}
   if((window.__uwPost||(x=>/approv/i.test(x)))(rec.status||"")){const m=/OPENING_OFFER:\s*(\d+)/.exec(rec.note||"");const ov=rec.openingOffer||(m?Number(m[1]):0);
-    d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Approved by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(ov?(/approv/i.test(rec.status||"")?` · Min ${$$(ov)} added to the offer script`:` · opening offer ${$$(ov)}`):/OPENING_OFFER:\s*none/.test(rec.note||"")?" · no offer":"")}));return d;}
+    d.append(E("div",{style:"text-align:center;color:#8e8e93;font-size:13px",text:`Approved by ${rec.decidedBy||""} · ${rec.decidedAt||""}`+(ov?(/approv/i.test(rec.status||"")?` · Min ${$$(ov)} added to the offer script`:` · opening offer ${$$(ov)}`):/OPENING_OFFER:\s*none/.test(rec.note||"")?" · no offer":"")}));
+    if(api.isOwner())d.append(E("button",{class:"act txo",type:"button",style:"width:100%;margin-top:8px",onclick:()=>textOfferSheet(rec,ov||(U.offer||{}).min||0,false)},"💬 Text the offer instead of a call"));return d;}
   /* Opening offer: always starts at MIN (Irwin, Nov 6); editable before approving */
   const oi=E("input",{type:"text",inputmode:"numeric",autocomplete:"off","aria-label":"Opening offer",id:"uwOpen",size:"1"});openEl=oi;
   const reset=E("button",{type:"button",class:"oreset",hidden:"",onclick:()=>{openEdited=false;syncOpen();oi.focus();}},"Use MIN");
@@ -620,7 +623,9 @@ function dock(rec){
   const pp=E("div",{class:"ppan",hidden:""},E("div",{class:"field"},pr),E("div",{class:"acts"},pc));
   const pb=E("button",{class:"act passb",type:"button",onclick:()=>{pp.hidden=!pp.hidden;if(!pp.hidden)pr.focus();}},"Pass");
   if(!api.isOwner())pb.disabled=true;
-  d.append(E("div",{class:"acts"},ab,pb),pp);
+  const txb=E("button",{class:"act txo",type:"button",onclick:()=>{if(!api.isOwner()){api.toast("Only Irwin texts offers");return;}if(hasHold()&&!U._pick){api.toast("Pick Fix & Flip or Buy & Hold first");return;}textOfferSheet(rec,openVal(),true);}},"💬 Text");
+  if(!api.isOwner())txb.disabled=true;
+  d.append(E("div",{class:"acts"},ab,txb,pb),pp);
   const ta=E("textarea",{rows:"1",placeholder:"Change underwriting…","aria-label":"Change underwriting"});
   const send=E("button",{class:"send",type:"button","aria-label":"Send change",disabled:""});
   send.innerHTML='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg>';
@@ -628,6 +633,41 @@ function dock(rec){
   send.addEventListener("click",()=>{const v=ta.value.trim();if(v)decide(rec,"Change",v);});
   d.append(E("div",{class:"comp"},E("div",{class:"field"},ta,send)));
   return d;
+}
+/* Irwin, Nov 15 2026 5:35 PM: "Let's have the option to text the offer in the underwriting incase they don't want to do a call. For direct to seller there is no commission but everything else is the same. Cash offer, 3 week close, 7 day inspection period." */
+function offerText(info,money,street){
+  const first=(info&&info.firstName)||"there";
+  if(info&&info.direct)return `Hi ${first}, thanks for taking the time to share the details on ${street}. We can offer ${money} cash for the property. We can close in 3 weeks with a 7-day inspection period. Let me know if that works for you!`;
+  if(U.offerTemplate)return String(U.offerTemplate).split("{AMOUNT}").join(money);
+  return `Hi ${first}, my partners and I can offer ${money} cash for ${street}. We pay 3% commission, close in 3 weeks, and need a 7-day inspection period. Could you submit it to the seller?`;
+}
+async function textOfferSheet(rec,amount,approveToo){
+  const api=window.__uwApi;const street=String((U.subject||{}).address||rec.address||"").split(",")[0];
+  const box=E("div",{class:"rform",style:"margin-top:0"},E("div",{class:"carn",text:"Finding the seller in GHL…"}));
+  openSheet("Text the offer",[box]);
+  let info;try{info=await api.run("offerTextInfo",rec.id);}catch(e){info=null;}
+  if(!info||!info.ok){box.replaceChildren(E("div",{class:"carn",text:info&&info.reason==="NO_CONTACT"?"Couldn't find the seller's contact in GHL for this address – text them from GHL.":"Couldn't load the seller – try again."}));return;}
+  const amt=figNum("0","Offer amount");amt.value=amount?Math.round(amount).toLocaleString("en-US"):"";
+  const ta=E("textarea",{rows:"6","aria-label":"Offer text"});
+  let lastMoney="";const setText=()=>{const v=amt.val();const m=v?$$(v):"";if(!ta._edited||!lastMoney){ta.value=offerText(info,m||"$___",street);}else if(lastMoney&&m){ta.value=ta.value.split(lastMoney).join(m);}lastMoney=m;upd();};
+  ta.addEventListener("input",()=>{ta._edited=true;upd();});amt.addEventListener("input",setText);
+  const send=E("button",{class:"rbtn edit",type:"button",disabled:""},"Send");let armed=false;
+  function upd(){const v=amt.val(),m=v?$$(v):"";const ok=v>0&&ta.value.trim()&&ta.value.indexOf(m)>=0;send.disabled=!ok;if(!armed)send.textContent=ok?`Text ${m} offer to ${info.firstName||info.name}`:(v>0?"Put the amount in the text":"Enter the offer");}
+  send.addEventListener("click",async()=>{if(send.disabled)return;const v=amt.val(),m=$$(v);
+    if(!armed){armed=true;send.textContent=`Tap again to send ${m} to ${info.name}`;send.classList.add("confirm");setTimeout(()=>{armed=false;send.classList.remove("confirm");upd();},4000);return;}
+    send.disabled=true;send.textContent="Sending…";
+    try{const r=await api.run("textOffer",rec.id,v,ta.value.trim());
+      if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");
+      api.haptic("ok");closeSheet();api.toast(r.sent?`${m} offer texted to ${r.name}`:r.queued?`${m} offer queued – it goes out when texting hours start (9–9, Mon–Sat)`:`Not sent – ${r.msg}`);
+      if(approveToo&&!/approv/i.test(rec.status||"")){const mn=(U.offer||{}).min,stg=hasHold()?`\nSTRATEGY: ${U._pick==="hold"?"hold":"flip"}`:"";rec.openingOffer=v;await decide(rec,"Approve",`OPENING_OFFER: ${v}\nOpening offer ${m}${(typeof mn==="number"&&v!==Math.round(mn))?` (edited by Irwin – MIN was ${$$(mn)})`:" (MIN)"} – texted to the seller${stg}`);}}
+    catch(e){api.haptic("err");armed=false;send.classList.remove("confirm");upd();const R=String(e.message);api.toast(R==="IRWIN_ONLY"?"Only Irwin texts offers":R==="ALREADY_QUEUED"?"That offer is already queued":R==="AMOUNT_NOT_IN_TEXT"?"The amount has to be in the text":"Couldn't send – try again");}});
+  box.replaceChildren(
+    E("div",{class:"rpick"},E("div",{},E("div",{class:"lbl",text:info.direct?"Seller":"Agent"}),E("b",{text:info.name||"–"}),E("div",{class:"rs",text:`${info.phone||""} · from the ${info.direct?"AQ":"realtor"} number`}))),
+    E("div",{class:"lbl",style:"margin-top:12px",text:"Offer"}),E("div",{class:"money"},E("span",{text:"$"}),amt),
+    E("div",{class:"lbl",style:"margin-top:12px",text:"Text"}),ta,
+    E("div",{class:"carn",style:"text-align:left",text:approveToo?"Sending also approves this underwriting (Min/Max go in the offer script).":"Goes out right away during texting hours (9–9, Mon–Sat); otherwise it's queued."}),
+    send,E("button",{class:"rcancel",type:"button",onclick:closeSheet},"Cancel"));
+  setText();
 }
 async function decide(rec,decision,note){
   const api=window.__uwApi;const prev=rec.status;
