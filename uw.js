@@ -97,6 +97,8 @@ const css=`
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}.pgrid button{position:relative;padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:#000;aspect-ratio:4/3}.pgrid button img,.pgrid button .noimg{width:100%;height:100%;object-fit:cover;display:block}.pgrid button[aria-pressed=true]{border-color:#0a84ff}.pgrid button[aria-pressed=true]::after{content:"✓";position:absolute;top:4px;right:4px;background:#0a84ff;color:#fff;border-radius:50%;width:22px;height:22px;font:700 14px/22px system-ui;text-align:center}.pgrid .pn{position:absolute;left:4px;bottom:3px;color:#fff;font:600 11px system-ui;text-shadow:0 1px 2px #000}
 .pzoom{display:block;margin:8px 0 0;background:none;border:0;color:#7fb2ff;font:14px system-ui;padding:0}
 .rl .added{color:#7fb2ff;font-size:12px;font-weight:600}
+.rlist{margin-top:6px}.ropt{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;background:#1c1c1e;border:0;border-radius:12px;color:#fff;padding:12px;margin-top:6px;font:15px system-ui;text-align:left}.ropt b{color:#e3b341;white-space:nowrap}.ropt .yours{margin-left:8px;background:#0a1f3d;color:#7fb2ff;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:600}
+.rpick{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#000;border-radius:12px;padding:10px 12px}.rpick b{font-size:17px}.rpick .lbl{margin-bottom:2px}.rpick .rs{color:#8e8e93;font-size:13px;margin-top:2px}
 .rmd{margin-top:14px;background:#2c1a17;border:1px solid #5a2a24;border-radius:14px;padding:12px;color:#ffd7d2;font-size:14px}.rmd b{display:block;color:#ff6961;margin-bottom:4px}
 .pnav{display:flex;align-items:center;justify-content:space-between;margin:18px 0 6px;color:#8e8e93;font-size:13px}
 .pnav button{background:#1c1c1e;border:1px solid #3a3a3c;color:#0a84ff;border-radius:999px;padding:8px 14px;font:600 14px system-ui}
@@ -347,38 +349,60 @@ function removeBox(l){
   return E("div",{},edited,eb,wrap);
 }
 /* Irwin, Nov 14 2026: "In the inbox underwriting items allow me to add repair items and allow me to select a photos as to why it needs that repair" */
-const AREAS=["Exterior","Interior","Kitchen","Bath","Mechanicals","Other"];
+const AREAS=["Exterior","Interior","Kitchen","Bath","Mechanicals","Other","Gentrification"];
+/* Irwin, Nov 14 2026 8:12 PM: "Make the repairs easier for me to select. Have it able to select from the items on my repair cheat sheet. And also give me the option to add something thats not on the cheat sheet. Anything that I add that is not on the cheat sheet save it in the options of repairs" */
+let repOpts=null;
+async function loadRepOpts(){if(repOpts)return repOpts;const r=await window.__uwApi.run("getRepairOptions");if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");repOpts=r.options||[];return repOpts;}
 function addRepairSheet(){
   const api=window.__uwApi;if(!api.isOwner()){api.toast("Only Irwin can change the repair budget");return;}
-  const photos=((U.subject||{}).photos||[]).filter(Boolean);let area="",pick=-1;
-  const areas=E("div",{class:"areas"},...AREAS.map(a=>E("button",{type:"button","aria-pressed":"false",onclick:ev=>{area=a;[...areas.children].forEach(b=>b.setAttribute("aria-pressed",String(b===ev.currentTarget)));upd();}},a)));
-  const item=E("input",{class:"txt",type:"text",placeholder:"What needs work? e.g. Replace back porch steps","aria-label":"Repair item"});
-  const cost=figNum("0","Repair cost");
+  const box=E("div",{class:"rlist"},E("div",{class:"carn",text:"Loading your repair list…"}));
+  const q=E("input",{class:"txt",type:"search",placeholder:"Search repairs (e.g. roof, paint)","aria-label":"Search repairs"});
+  const other=E("button",{class:"addrep",type:"button",onclick:()=>repairDetails(null,q.value.trim())},"+ Something not on the list");
+  openSheet("Add a repair",[E("div",{class:"rform",style:"margin-top:0"},q),box,other]);
+  const paint=()=>{const k=q.value.trim().toLowerCase();const L=(repOpts||[]).filter(o=>!k||(o.item+" "+o.area).toLowerCase().includes(k));
+    const g={},order=[];L.forEach(o=>{if(!g[o.area]){g[o.area]=[];order.push(o.area);}g[o.area].push(o);});
+    box.replaceChildren(...(L.length?order.flatMap(a=>[E("div",{class:"grp"},E("span",{text:a})),...g[a].map(o=>E("button",{class:"ropt",type:"button",onclick:()=>repairDetails(o)},
+      E("span",{class:"on"},o.item,o.custom?E("span",{class:"yours",text:"yours"}):null),E("b",{text:$$(o.cost)+(o.per?" / "+o.per.replace(/^each$/,"ea"):"")})))]):[E("div",{class:"carn",text:k?`Nothing on your list matches "${q.value.trim()}" – tap "Something not on the list"`:"Your repair list is empty"})]));};
+  q.addEventListener("input",paint);
+  loadRepOpts().then(paint).catch(()=>{box.replaceChildren(E("div",{class:"carn",text:"Couldn't load your repair list – you can still add one below"}));});
+}
+function repairDetails(opt,typed){
+  const photos=((U.subject||{}).photos||[]).filter(Boolean);let area=opt?opt.area:"",pick=-1;const each=!!(opt&&/each|ea/i.test(opt.per||""));
+  const areas=E("div",{class:"areas"},...AREAS.map(a=>E("button",{type:"button","aria-pressed":String(a===area),onclick:ev=>{area=a;[...areas.children].forEach(b=>b.setAttribute("aria-pressed",String(b===ev.currentTarget)));upd();}},a)));
+  const item=E("input",{class:"txt",type:"text",placeholder:"What needs work? e.g. Replace back porch steps","aria-label":"Repair item"});if(opt)item.value=opt.item;else if(typed)item.value=typed;
+  const qty=figNum("1","How many");if(each)qty.value="1";
+  const cost=figNum("0","Repair cost");if(opt)cost.value=String(opt.cost);
+  qty.addEventListener("input",()=>{const n=qty.val();if(n&&opt){cost.value=String(n*opt.cost);}upd();});
   const why=E("textarea",{rows:"2",placeholder:"Why does it need this? (the AI learns from this)"});
   const big=E("div",{});
-  const grid=E("div",{class:"pgrid"},...photos.map((u,i)=>E("button",{type:"button","aria-pressed":"false","aria-label":`Photo ${i+1}`,onclick:ev=>{pick=pick===i?-1:i;[...grid.children].forEach((b,k)=>b.setAttribute("aria-pressed",String(k===pick)));
+  const grid=E("div",{class:"pgrid"},...photos.map((u,i)=>E("button",{type:"button","aria-pressed":"false","aria-label":`Photo ${i+1}`,onclick:()=>{pick=pick===i?-1:i;[...grid.children].forEach((b,k)=>b.setAttribute("aria-pressed",String(k===pick)));
       big.replaceChildren(...(pick<0?[]:[pimg(photos[pick],{class:"rbig",alt:"Selected photo",onclick:()=>lightbox(photos[pick],`Photo ${pick+1} of ${photos.length}`,photos,pick)}),E("div",{class:"carn",text:`Photo ${pick+1} of ${photos.length} selected · tap to enlarge`})]));upd();}},
     pimg(u,{loading:"lazy",alt:""}),E("span",{class:"pn",text:String(i+1)}))));
   const save=E("button",{class:"rbtn edit",type:"button",disabled:""},"Add repair");
   function upd(){const c=cost.val();const ok=area&&item.value.trim()&&c!=null&&c>0&&why.value.trim()&&(pick>=0||!photos.length);save.disabled=!ok;save.textContent=c?`Add ${$$(c)} repair`:"Add repair";}
   [item,cost,why].forEach(x=>x.addEventListener("input",upd));
-  save.addEventListener("click",()=>{if(save.disabled)return;addLine({area,item:item.value.trim(),cost:cost.val(),reason:why.value.trim(),photo:pick>=0?photos[pick]:"",photoNote:pick>=0?`Photo ${pick+1} of ${photos.length} – picked by Irwin`:""});});
-  openSheet("Add a repair",[E("div",{class:"rform",style:"margin-top:0"},
-    E("div",{class:"lbl",text:"Area"}),areas,
-    E("div",{class:"lbl",style:"margin-top:12px",text:"Repair"}),item,
+  save.addEventListener("click",()=>{if(save.disabled)return;const n=each?qty.val():null;const it=item.value.trim()+(n&&n>1?` (${n})`:"");
+    const isNew=!opt||opt.item.toLowerCase()!==item.value.trim().toLowerCase();
+    addLine({area,item:it,cost:cost.val(),reason:why.value.trim(),photo:pick>=0?photos[pick]:"",photoNote:pick>=0?`Photo ${pick+1} of ${photos.length} – picked by Irwin`:"",fromList:!isNew,per:isNew?"":(opt.per||""),source:isNew?"Added by Irwin":(opt.source||"Repair Cheat Sheet")+" – picked by Irwin"});});
+  const head=opt?E("div",{class:"rpick"},E("div",{},E("div",{class:"lbl",text:opt.area}),E("b",{text:opt.item}),E("div",{class:"rs",text:`${$$(opt.cost)}${opt.per?" / "+opt.per:""} · ${opt.custom?"your item":"cheat sheet"}`})),E("button",{type:"button",class:"pzoom",onclick:addRepairSheet},"Change")):
+    E("div",{class:"carn",style:"text-align:left",text:"Not on your list yet – it gets saved to your repair options so you can pick it next time."});
+  openSheet("Add a repair",[E("div",{class:"rform",style:"margin-top:0"},head,
+    opt?null:E("div",{class:"lbl",style:"margin-top:12px",text:"Area"}),opt?null:areas,
+    opt?null:E("div",{class:"lbl",style:"margin-top:12px",text:"Repair"}),opt?null:item,
+    each?E("div",{class:"lbl",style:"margin-top:12px",text:`How many (${$$(opt.cost)} each)`}):null,each?E("div",{class:"money"},qty):null,
     E("div",{class:"lbl",style:"margin-top:12px",text:"Cost"}),E("div",{class:"money"},E("span",{text:"$"}),cost),
     E("div",{class:"lbl",style:"margin-top:12px",text:"Why it needs work"}),why,
     E("div",{class:"lbl",style:"margin-top:12px",text:photos.length?"Pick the photo that shows it":"No listing photos on this deal"}),
-    photos.length?grid:null,big,save,E("button",{class:"rcancel",type:"button",onclick:closeSheet},"Cancel"))]);
-  setTimeout(()=>item.focus(),300);
+    photos.length?grid:null,big,save,E("button",{class:"rcancel",type:"button",onclick:addRepairSheet},"Back to the list"))]);
+  upd();setTimeout(()=>(opt?why:item).focus(),300);
 }
 async function addLine(line){
   const api=window.__uwApi;const snap=JSON.stringify(U);
-  const l=Object.assign({},line,{source:"Added by Irwin",added:{by:api.me(),at:"now",reason:line.reason}});
+  const l=Object.assign({},line,{added:{by:api.me(),at:"now",reason:line.reason}});l.source=l.source||"Added by Irwin";const isNew=!l.fromList;
   U.rehab=U.rehab||{lines:[],total:0};U.rehab.lines=U.rehab.lines||[];U.rehab.lines.push(l);recalc(U);
   closeSheet();api.haptic("ok");api.toast(`Added – rehab now ${$$(U.rehab.total)}`);refreshNumbers();
-  try{const r=await api.run("editRepair",curRec.id,-1,l.item,"add",l.reason,l.cost,JSON.stringify(l));
-    if(r&&r.ok&&r.data){curRec.data=r.data;U=r.data;refreshNumbers();return;}
+  delete l.fromList;try{const r=await api.run("editRepair",curRec.id,-1,l.item,"add",l.reason,l.cost,JSON.stringify(Object.assign({fromList:!isNew},l)));
+    if(r&&r.ok&&r.data){curRec.data=r.data;U=r.data;refreshNumbers();if(isNew){repOpts=null;api.toast(`Added – "${line.item}" saved to your repair options`);}return;}
     if(r&&String(r.reason)==="IRWIN_ONLY")throw new Error("IRWIN_ONLY");
     /* the server can't add lines yet → send it to the Underwriting AI as Irwin's change note; it adds the line with this photo and redoes the offer */
     const note=`Add this repair line exactly as I entered it (keep it – my edit is final): ${l.area} – ${l.item} – $${l.cost}. Why: ${l.reason}.`+(l.photo?` Photo: ${l.photo} (${l.photoNote}).`:"");
