@@ -7,6 +7,7 @@ const css=`
 #uwView .uwhead .t{min-width:0;text-align:center}
 #uwView .uwhead .t b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #uwView .uwhead .t span{font-size:12px;color:#8e8e93}
+.uwhead .t .uwseller{font-size:13px;color:#8e8e93;margin:1px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.uwhead .t .uwseller .cpy{display:inline;font-size:13px;color:#0a84ff;font-weight:600}
 .uwback{background:none;border:0;color:#0a84ff;font-size:17px;padding:6px 0;display:flex;align-items:center;gap:2px}
 .uwback svg{width:12px;height:20px}
 .uwst{font-size:11px;font-weight:700;border-radius:999px;padding:4px 9px;background:#2c2c2e;color:#e5e5ea;white-space:nowrap}
@@ -563,7 +564,7 @@ function render(rec){curRec=rec;cput(rec);
   U=rec.data;const s=U.subject||{},st=rec.status||"Draft";
   const stCls="uwst";const stCol=(window.__uwColor||(()=>"#e5e5ea"))(st);
   view.replaceChildren(
-    E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:s.address||"Underwriting"}),E("span",{text:[s.type,`${s.beds??"–"}bd/${s.baths??"–"}ba`,U.confidence?U.confidence+" confidence":""].filter(Boolean).join(" · ")})),E("span",{class:stCls,style:`color:${stCol};box-shadow:inset 0 0 0 1px ${stCol}55;background:${stCol}1f`,text:st})),
+    E("div",{class:"uwhead"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:s.address||"Underwriting"}),(p=>p?E("div",{class:"uwseller"},p.label+": ",E("span",{class:"cpy",role:"button",title:"Tap to copy the name",text:p.name,onclick:e=>{e.stopPropagation();window.__uwApi.copy(p.name);}})):null)(window.__uwApi.person&&window.__uwApi.person(rec.id,U)),E("span",{text:[s.type,`${s.beds??"–"}bd/${s.baths??"–"}ba`,U.confidence?U.confidence+" confidence":""].filter(Boolean).join(" · ")})),E("span",{class:stCls,style:`color:${stCol};box-shadow:inset 0 0 0 1px ${stCol}55;background:${stCol}1f`,text:st})),
     E("div",{class:"uwbody"},
       E("div",{id:"uwMap"}),
       sumEl(),

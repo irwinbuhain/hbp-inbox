@@ -294,12 +294,21 @@ function uwPost(st){return /approv|sent|negotiat|accept|declin|pass|waiting/i.te
 window.__uwColor=uwColor;window.__uwPost=uwPost;
 window.__uwQueue=()=>(S.uw||[]).filter(u=>/^draft$/i.test(String(u.status||"Draft").trim()||"Draft")).sort((x,y)=>String(y.created||"").localeCompare(String(x.created||""))).map(u=>u.id);
 function kfmt(n){if(n===""||n==null)return"–";const x=Number(n);if(!isFinite(x))return"–";const a=Math.abs(x),t=a>=1000?"$"+(Math.round(a/100)/10)+"k":"$"+a;return x<0?"−"+t:t;}
+/* Irwin, Nov 15 2026 5:25 PM: "Please add the sellers name in the underwriting title below the address in the task view and main view. Make it also able to copy" */
+function uwPerson(u,data){
+  const d=data||{},aq=/^aq/i.test(String((u&&u.bot)||d.bot||""));
+  const ids=(u&&u.inboxIds)||d.inboxIds||[];
+  const lead=(S.rows||[]).filter(r=>ids.indexOf(r.id)>=0).map(r=>String(r.lead||"").replace(/\s*\([^)]*\)/g,"").trim()).find(x=>x&&isName(x.split(/\s*[,/&+]\s*|\s+and\s+/)[0]));
+  const fromNotes=(()=>{const n=((d.subject||{}).notes||[]).join("\n");const m=n.match(/(?:seller(?: lead)?|owner)[^A-Za-z]{0,4}:?\s*([A-Z][a-z'’-]+(?:\s+[A-Z][a-z'’.-]+){1,2})/);return m?m[1]:"";})();
+  const c=d.contact||{};const name=aq?(d.seller&&d.seller.name)||lead||fromNotes||c.name||"":(c.name||lead||"");
+  return name?{name:name.split(/\s*[,/&+]\s*|\s+and\s+/)[0].trim(),label:aq?"Seller":"Agent"}:null;}
 function uwRow(u){
   return el("button",{class:"row",type:"button",onclick:()=>window.__uw&&window.__uw.open(u.id)},
     el("span",{class:"dot"},!uwPost(u.status)?el("i",{style:"background:#e3b341"}):null),
     u.photo?el("img",{class:"av uwav",src:u.photo,alt:"",referrerpolicy:"no-referrer"}):el("span",{class:"av offer",text:"UW"}),
     el("span",{class:"rtext"},
       el("span",{class:"rline"},el("span",{class:"rname",text:String(u.address||"").split(",")[0]}),el("span",{class:"rtime",style:`color:${uwColor(u.status)};font-weight:600`,text:u.status||"Draft"})),
+      (p=>p?el("span",{class:"rprev uwwho"},p.label+": ",nm(p.name)):null)(uwPerson(u)),
       el("span",{class:"rprev",text:[u.type,u.grade&&u.grade!=="unknown"?"Grade "+u.grade:"",u.comps?u.comps+" comps":""].filter(Boolean).join(" · ")}),
       el("span",{class:"rtag"},el("b",{text:`ARV ${kfmt(u.arv)} · Rehab ${kfmt(u.rehab)} · `}),el("span",{class:Number(u.max)<0?"negt":"",text:`MIN ${kfmt(u.min)} / MAX ${kfmt(u.max)}`}))));
 }
@@ -592,7 +601,7 @@ async function decide(r,decision,note){
     INIT=TG.initData||"";START=(TG.initDataUnsafe&&TG.initDataUnsafe.start_param)||"";
   }
   if(!START){try{START=new URLSearchParams(location.search).get("task")||"";}catch(e){}}
-  window.__uwApi={run:(fn,...x)=>run(fn,INIT,...x),isOwner:()=>S.isOwner,me:()=>S.me,toast,haptic,
+  window.__uwApi={run:(fn,...x)=>run(fn,INIT,...x),isOwner:()=>S.isOwner,me:()=>S.me,toast,haptic,person:(id,data)=>uwPerson((S.uw||[]).find(x=>x.id===id)||{bot:(data||{}).bot,inboxIds:(data||{}).inboxIds},data),copy:t=>copyName(t),
     /* instant list updates after acting in the underwriting / report screens */
     patch:(kind,id,fields)=>{const L=kind==="uw"?S.uw:S.reports;const it=(L||[]).find(x=>x.id===id||(x.inboxIds||[]).indexOf(id)>=0);
       if(it){const key=(kind==="uw"?"u:":"r:")+it.id;if(kind==="uw")OV.set(key,fields,it.status);else OV.set(key,fields,null);Object.assign(it,fields);}
