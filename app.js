@@ -27,7 +27,7 @@ const OV=(()=>{let m={};try{m=JSON.parse(localStorage.getItem("hbp-ov")||"{}");}
   return {
     set(k,fields,base){m[k]={f:fields,b:base,t:now()};save();},
     del(k){delete m[k];save();},
-    rows(L){gc();L=L||[];const ln=L.find(r=>r.botRef==="dl-launcher");if(ln)S.launcher=ln;S.deals=L.filter(r=>/^ds-/.test(r.botRef));L=L.filter(r=>r.botRef!=="dl-launcher"&&!/^ds-/.test(r.botRef));L.forEach(r=>fix("t:"+r.id,r));return L;},
+    rows(L){gc();L=L||[];const ln=L.find(r=>r.botRef==="dl-launcher");if(ln)S.launcher=ln;/* Irwin, Nov 16 2026 4:29 PM: a Dispo Desk question (bot ref "ds-cancel-…") was swallowed into the Deals tab with no buttons – only real Deal Status cards (ID "DS-…") are deals */const isDeal=r=>/^ds-/.test(r.botRef)&&/^DS-/.test(r.id);S.deals=L.filter(isDeal);L=L.filter(r=>r.botRef!=="dl-launcher"&&!isDeal(r));L.forEach(r=>fix("t:"+r.id,r));return L;},
     uw(L){gc();(L||[]).forEach(u=>fix("u:"+u.id,u));return L;},
     one(kind,obj){gc();return obj?fix((kind==="uw"?"u:":"r:")+obj.id,obj):obj;},
     rp(L){gc();(L||[]).forEach(r=>{const o=m["r:"+r.id];if(!o)return;if(Number(r.open)<=Number(o.f.open)){delete m["r:"+r.id];save();}else r.open=o.f.open;});return L;},
@@ -498,6 +498,13 @@ function renderDock(r){
       const p=S.wpick&&S.wpick.indexOf(r.id+"|")===0?S.wpick.split("|")[1]:"";
       box.append(el("div",{class:"whint",text:p?"Tap again to set "+fmtWalk(p)+" – buyers get invited by text":"Pick the time you've confirmed with the seller"}));
       d.append(box);}}
+  /* Irwin, Nov 16 2026 4:29 PM: "Thank you for asking the question. But I need an option to answer. Approve ... button" – a Question card with no draft gets Approve; the note
+     tells the bot exactly what was approved (its own "What's needed" proposal), so every bot can act on it. Tap twice to confirm, like offers. */
+  if(r.status==="Open"&&!r.draft&&!offer&&/question/i.test(r.kind||"")&&r.action){
+    acts.append(el("button",{class:"act approve"+(S.confirm?" confirm":""),type:"button",disabled:S.busy?"":null,onclick:()=>{
+      if(!S.confirm){S.confirm=true;renderDock(r);clearTimeout(renderDock._t);renderDock._t=setTimeout(()=>{if(S.confirm){S.confirm=false;const rr=S.rows.find(x=>x.id===S.cur);if(rr)renderDock(rr);}},5000);return;}
+      S.confirm=false;decide(r,"Approve","Approved – go ahead: "+r.action);}},S.confirm?"Tap to confirm":"Approve"));
+  }
   if(r.status==="Open"&&(r.draft||offer)){
     if(offer&&!S.isOwner){acts.append(el("button",{class:"act",type:"button",disabled:""},"Irwin approves offers"));}
     else{
