@@ -137,7 +137,7 @@ function errorBox(e){const m=String((e&&e.message)||e||"");const t=/NOT_ALLOWED/
 function modeSeg(){
   let ms=$("modeSeg");if(!ms){ms=el("div",{class:"seg",id:"modeSeg",style:"margin-bottom:8px"});$("whoSeg").before(ms);}
   const openSug=0; // report suggestions removed (Irwin, Nov 14 2026)
-  const nd=(S.deals||[]).length;ms.replaceChildren(...[["tasks","Tasks"],["deals",`Deals${nd?" · "+nd:""}`],["reports",`Reports${openSug?" · "+openSug:""}`]].map(([k,l])=>el("button",{type:"button","aria-pressed":String((S.mode||"tasks")===k),onclick:()=>{S.mode=k;haptic();render();}},l)));
+  const nd=(S.deals||[]).filter(r=>r.status!=="Resolved").length;ms.replaceChildren(...[["tasks","Tasks"],["deals",`Deals${nd?" · "+nd:""}`],["reports",`Reports${openSug?" · "+openSug:""}`]].map(([k,l])=>el("button",{type:"button","aria-pressed":String((S.mode||"tasks")===k),onclick:()=>{S.mode=k;haptic();render();}},l)));
 }
 /* Irwin, Nov 13 9:53 PM: "Lets add a deal status section ... Each property under contract will get one. It will show whose walking
    through for specific times ... Also add Offers as well as prices that buyers say they would buy it at." One hidden Inbox row per
