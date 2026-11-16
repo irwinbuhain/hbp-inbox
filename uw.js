@@ -291,7 +291,7 @@ async function editLine(l,action,reason,newCost){
   else{const from=Number(l.cost)||0;if(l.originalCost===undefined)l.originalCost=from;l.cost=Math.round(Number(newCost));l.costEdit={by:api.me(),at:"now",reason,from};}
   recalc(U);api.haptic("ok");api.toast((action==="remove"?"Removed":action==="restore"?"Restored":"Cost updated")+` – rehab now ${$$(U.rehab.total)}`);
   pagerPaint();refreshNumbers();
-  try{const r=await api.run("editRepair",curRec.id,idx,l.item,action,reason||"",action==="cost"?Number(newCost):null);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");curRec.data=r.data;U=r.data;refreshNumbers();}
+  try{const r=await api.run("editRepair",curRec.id,idx,l.item,action,reason||"",action==="cost"?Number(newCost):null);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");U=fromServer(r.data);curRec.data=U;refreshNumbers();}
   catch(e){const d=JSON.parse(snap);curRec.data=d;U=d;api.haptic("err");api.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can change the repair budget":"Couldn't save – try again");pagerClose();refreshNumbers();}
 }
 /* Irwin, Nov 12 2026: "Always allow for the figures in the underwriting to be updated (ARV, Repairs, and Rent). Because these figures affect the offer."
@@ -309,7 +309,7 @@ function figApply(d,field,val,reason,by){
 async function editFig(field,val,reason){const api=window.__uwApi;if(!api.isOwner()){api.toast("Only Irwin can change the underwriting numbers");return;}
   const snap=JSON.stringify(U);figApply(U,field,val,reason,api.me());closeSheet();api.haptic("ok");
   api.toast(field==="arv"?`ARV now ${$$(U.arv.value)} – offer updated`:`Rent updated – NOI ${$$((U.offer.hold||{}).noi)}/yr`);refreshNumbers();
-  try{const r=await api.run("editFigures",curRec.id,field,val,reason);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");const keep=U._pick;curRec.data=r.data;U=r.data;if(keep)U._pick=keep;U._hc=0;refreshNumbers();}
+  try{const r=await api.run("editFigures",curRec.id,field,val,reason);if(!r||!r.ok)throw new Error((r&&r.reason)||"failed");const keep=U._pick;U=fromServer(r.data);curRec.data=U;if(keep)U._pick=keep;U._hc=0;refreshNumbers();}
   catch(e){const d=JSON.parse(snap);curRec.data=d;U=d;api.haptic("err");api.toast(String(e.message)==="IRWIN_ONLY"?"Only Irwin can change the underwriting numbers":"Couldn't save – try again");refreshNumbers();}}
 function figNum(ph,lbl){const i=E("input",{type:"text",inputmode:"numeric",placeholder:ph,"aria-label":lbl});i.val=()=>{const n=Number(String(i.value).replace(/[^0-9.]/g,""));return i.value.trim()!==""&&isFinite(n)?Math.round(n):null;};return i;}
 function figForm(fields,chips,why,onSave){const ta=E("textarea",{rows:"2",placeholder:why});const save=E("button",{class:"rbtn edit",type:"button",disabled:""},"Save");
@@ -405,7 +405,7 @@ function repairDetails(opt,typed,photoAt){
   const why=E("textarea",{rows:"2",placeholder:"Why does it need this? (the AI learns from this)"});
   const big=pick>=0?E("div",{class:"rpph"},pimg(photos[pick],{class:"rbig",alt:"Selected photo",onclick:()=>lightbox(photos[pick],`Photo ${pick+1} of ${photos.length}`,photos,pick)}),E("div",{class:"carn",text:`Photo ${pick+1} of ${photos.length} – tied to this repair`}),E("button",{type:"button",class:"pzoom",onclick:()=>addRepairSheet(pick)},"Change photo")):null;
   const save=E("button",{class:"rbtn edit",type:"button",disabled:""},"Add repair");
-  function upd(){const c=cost.val();const ok=area&&item.value.trim()&&c!=null&&c>0&&why.value.trim()&&(pick>=0||!photos.length);save.disabled=!ok;save.textContent=c?`Add ${$$(c)} repair`:"Add repair";}
+  function upd(){const c=cost.val();const ok=area&&item.value.trim()&&c!=null&&c>0&&why.value.trim();save.disabled=!ok;save.textContent=c?`Add ${$$(c)} repair`:"Add repair";}
   [item,cost,why].forEach(x=>x.addEventListener("input",upd));
   save.addEventListener("click",()=>{if(save.disabled)return;const n=each?qty.val():null;const it=item.value.trim()+(n&&n>1?` (${n})`:"");
     const isNew=!opt||opt.item.toLowerCase()!==item.value.trim().toLowerCase();
@@ -421,6 +421,14 @@ function repairDetails(opt,typed,photoAt){
     save,E("button",{class:"rcancel",type:"button",onclick:()=>addRepairSheet(pick>=0?pick:undefined)},"Back to the photos"))]);
   upd();setTimeout(()=>(opt?why:item).focus(),300);
 }
+/* Irwin, Nov 16 2026: "I added repairs and now I can't view all photos" – the server sends back the saved record, which only keeps
+   6–8 photos per house (the full sets come from the Photos tab when the page loads). Keep the full photo lists and the strategy picked on screen. */
+function fromServer(nd){
+  const od=U||{};if(!nd)return od;
+  const sp=(od.subject||{}).photos||[];if(nd.subject&&sp.length>((nd.subject.photos||[]).length))nd.subject.photos=sp;
+  (nd.comps||[]).forEach(c=>{const o=(od.comps||[]).find(x=>x.address===c.address);if(o&&(o.photos||[]).length>(c.photos||[]).length)c.photos=o.photos;});
+  Object.keys(od).forEach(k=>{if(k.charAt(0)==="_"&&nd[k]===undefined)nd[k]=od[k];});
+  return nd;}
 async function addLine(line){
   const api=window.__uwApi;const snap=JSON.stringify(U);
   const l=Object.assign({},line,{added:{by:api.me(),at:"now",reason:line.reason}});l.source=l.source||"Added by Irwin";const isNew=!l.fromList;
@@ -429,7 +437,7 @@ async function addLine(line){
   const onAdd=()=>!!(sheet&&sheet.isConnected&&(sheet.querySelector("b")||{}).textContent==="Add a repair");
   addRepairSheet(addPhotoAt);api.haptic("ok");api.toast(`Added ${l.item} – rehab now ${$$(U.rehab.total)}`);refreshNumbers();
   delete l.fromList;try{const r=await api.run("editRepair",curRec.id,-1,l.item,"add",l.reason,l.cost,JSON.stringify(Object.assign({fromList:!isNew},l)));
-    if(r&&r.ok&&r.data){curRec.data=r.data;U=r.data;refreshNumbers();if(isNew){repOpts=null;api.toast(`Added – "${line.item}" saved to your repair options`);}return;}
+    if(r&&r.ok&&r.data){U=fromServer(r.data);curRec.data=U;refreshNumbers();if(isNew){repOpts=null;api.toast(`Added – "${line.item}" saved to your repair options`);}return;}
     if(r&&String(r.reason)==="IRWIN_ONLY")throw new Error("IRWIN_ONLY");
     /* the server can't add lines yet → send it to the Underwriting AI as Irwin's change note; it adds the line with this photo and redoes the offer */
     const note=`Add this repair line exactly as I entered it (keep it – my edit is final): ${l.area} – ${l.item} – $${l.cost}. Why: ${l.reason}.`+(l.photo?` Photo: ${l.photo} (${l.photoNote}).`:"");
