@@ -84,7 +84,7 @@ async function act(decision,text,note){
 /* cache: reports open instantly from memory/localStorage, then refresh in the background */
 const MEM={};
 function cget(id){if(MEM[id])return MEM[id];try{const v=JSON.parse(localStorage.getItem("hbp-rp:"+id)||"null");if(v){MEM[id]=v;return v;}}catch(e){}return null;}
-function cput(r){if(!r||!r.id)return;MEM[r.id]=r;try{localStorage.setItem("hbp-rp:"+r.id,JSON.stringify(r));const ks=Object.keys(localStorage).filter(k=>k.indexOf("hbp-rp:")===0);if(ks.length>12)ks.slice(0,ks.length-12).forEach(k=>localStorage.removeItem(k));}catch(e){}}
+function cput(r){if(!r||!r.id)return;MEM[r.id]=r;try{localStorage.setItem("hbp-rp:"+r.id,JSON.stringify(r));const ks=Object.keys(localStorage).filter(k=>k.indexOf("hbp-rp:")===0);if(ks.length>30)ks.slice(0,ks.length-30).forEach(k=>localStorage.removeItem(k));}catch(e){}}
 let openId=null;
 async function open(id){
   const A=api();openId=id;const c=cget(id);
@@ -97,7 +97,7 @@ async function open(id){
 }
 function close(){openId=null;view.classList.remove("on");view.style.transform="";api().backOff();}
 let pf=false;
-async function prefetch(ids){if(pf)return;pf=true;try{for(const id of (ids||[]).slice(0,8)){if(MEM[id])continue;try{const f=await api().run("getReport",id);if(f)cput(f);}catch(e){}}}finally{pf=false;}}
+async function prefetch(ids){if(pf)return;pf=true;try{const q=(ids||[]).slice(0,20).filter(id=>!MEM[id]&&!cget(id));const w=async()=>{while(q.length){const id=q.shift();try{const f=await api().run("getReport",id);if(f)cput(f);}catch(e){}}};await Promise.all([w(),w(),w()]);}finally{pf=false;}}
 /* swipes (Irwin, Nov 9): left = next report, right = previous report; right on the first report – or from the left edge – goes back to the list */
 function nav(step){const ord=(window.__rpOrder&&window.__rpOrder())||[];const i=ord.indexOf(openId);if(i<0)return false;const j=i+step;if(j<0||j>=ord.length)return false;open(ord[j]);
   view.classList.remove("rp-l","rp-r");void view.offsetWidth;view.classList.add(step>0?"rp-l":"rp-r");api().haptic&&api().haptic();return true;}

@@ -121,6 +121,7 @@ async function load(manual){
   if(same){const sub=$("sub");if(sub&&S.mode!=="deals"&&S.mode!=="reports"&&/updated/.test(sub.textContent||""))sub.textContent=`${S.me} · updated ${longTime(S.lastLoad)}`;return;}
   if(S.view==="thread"&&S.cur&&!S.rows.find(r=>r.id===S.cur)){closeThread();return;}
   renderList();
+  setTimeout(()=>{try{knownNames(null);}catch(e){}},50);
   prefetchDetails();
   if(S.view==="thread"&&S.cur&&!(document.activeElement&&document.activeElement.tagName==="TEXTAREA")){const r=S.rows.find(x=>x.id===S.cur);const sig=JSON.stringify(r);if(sig!==S.curSig){renderThread();}}
 }
@@ -129,8 +130,9 @@ async function load(manual){
 let pfT=0;function prefetchDetails(){clearTimeout(pfT);pfT=setTimeout(()=>{
   const uw=(S.uw||[]).slice().sort((a,b)=>(uwPost(a.status)-uwPost(b.status))||String(b.created||"").localeCompare(String(a.created||""))).map(u=>u.id);
   const rp=(S.reports||[]).map(r=>r.id);
-  if(window.__uw&&window.__uw.prefetch)window.__uw.prefetch(uw).then(()=>window.__rp&&window.__rp.prefetch&&window.__rp.prefetch(rp));
-  else if(window.__rp&&window.__rp.prefetch)window.__rp.prefetch(rp);
+  /* Irwin, Nov 17 2026: reports and underwritings load side by side (reports used to wait for every underwriting first) */
+  if(window.__rp&&window.__rp.prefetch)window.__rp.prefetch(rp);
+  if(window.__uw&&window.__uw.prefetch)window.__uw.prefetch(uw);
   if(!window.__uw||!window.__rp)prefetchDetails();},window.__uw&&window.__rp?400:800);}
 function scope(){const w=S.isOwner?"all":(S.who||"dandy");return S.rows.filter(r=>forMatch(r,w));}
 function openQueue(){return scope().filter(r=>r.status==="Open").sort((a,b)=>(isOffer(b)-isOffer(a))||sortKey(a.created).localeCompare(sortKey(b.created)));}
@@ -328,7 +330,15 @@ function copyName(t){t=String(t||"").trim();if(!t)return;
 /* Irwin, Nov 14 9:55 AM: "make sure it's only names. The '42 no answer buyers' should not be able to be copied" */
 const NOT_NAME=/\b(buyers?|sellers?|agents?|realtors?|leads?|owners?|tenants?|investors?|people|contacts?|list|block|group|team|no|answer|all|unknown|bot|desk|call|calls|llc|inc|properties|property|homes?|street|st|ave|avenue|rd|road|dr|drive|blvd)\b/i;
 function isName(t){t=String(t||"").trim();if(t.length<2||t.length>40||/\d|@|[\/|:#$%&+=()]/.test(t))return false;const w=t.split(/\s+/);if(w.length>4)return false;if(NOT_NAME.test(t))return false;return w.every(x=>/^[A-Z\u00C0-\u00DE][A-Za-z\u00C0-\u00FF'’.-]*$/.test(x));}
-function knownNames(r){const set=new Set();const add=n=>{n=String(n||"").trim();if(isName(n)&&n.split(/\s+/).length>=2)set.add(n);};
+/* Irwin, Nov 17 2026: "It still takes a little long when I try to open a task" – the name list was rebuilt (every deal card re-read) for every line of every task; now it's built once per data load */
+let _knC={rows:null,deals:null,lead:null,v:null};
+function knownNames(r){if(!(_knC.rows===S.rows&&_knC.deals===S.deals)){_knC={rows:S.rows,deals:S.deals,v:knownNames0(null),by:{}};}
+  const lead=r&&r.lead||"";if(_knC.by[lead])return _knC.by[lead];let out=_knC.v;
+  if(r&&isName(r.lead)){const f=String(r.lead).trim().split(/\s+/)[0];if(f.length>=3&&out.indexOf(f)<0)out=out.concat([f]).sort((a,b)=>b.length-a.length);}
+  return _knC.by[lead]=out;}
+let _reC={L:null,re:null};
+function namesRe(L){if(_reC.L===L)return _reC.re;const esc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");const re=new RegExp("(^|[^A-Za-z\u00C0-\u00FF])("+L.map(esc).join("|")+")(?![A-Za-z\u00C0-\u00FF])","g");_reC={L,re};return re;}
+function knownNames0(r){const set=new Set();const add=n=>{n=String(n||"").trim();if(isName(n)&&n.split(/\s+/).length>=2)set.add(n);};
   (S.rows||[]).forEach(x=>{add(x.lead);String(x.lead||"").split(/\s*(?:\/|,|&|\+|\band\b)\s*/).forEach(add);});
   (S.deals||[]).forEach(x=>{try{const d=JSON.parse(x.details||"{}")||{};[].concat(d.prices||[],d.notes||[],d.offers||[],d.waiting||[]).forEach(o=>add(o&&o.name));(d.walks||[]).forEach(w=>(w.buyers||[]).forEach(b=>add(b&&b.name)));}catch(e){}});
   const out=[...set];if(r&&isName(r.lead)){const f=String(r.lead).trim().split(/\s+/)[0];if(f.length>=3&&out.indexOf(f)<0)out.push(f);}
@@ -359,7 +369,7 @@ function detectNames(text){const out=[],re=/[A-Za-z\u00C0-\u00FF][A-Za-z\u00C0-\
 /* text → nodes with every name tappable (blue, copies the full name; a lone first name of this task's lead copies the lead's full name) */
 function withNames(text,r){text=String(text==null?"":text);if(!text)return [text];
   const full=r&&isName(r.lead)?String(r.lead).trim():"";const hits=[];
-  const L=knownNames(r);if(L.length){const esc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");const re=new RegExp("(^|[^A-Za-z\u00C0-\u00FF])("+L.map(esc).join("|")+")(?![A-Za-z\u00C0-\u00FF])","g");let m;
+  const L=knownNames(r);if(L.length){const re=namesRe(L);re.lastIndex=0;let m;
     while((m=re.exec(text))){const st=m.index+m[1].length;hits.push([st,st+m[2].length,m[2]]);re.lastIndex=st+m[2].length;}}
   detectNames(text).forEach(h=>{if(!hits.some(k=>h[0]<k[1]&&k[0]<h[1]))hits.push(h);});
   /* a first name on its own ("Anil said…") copies that person's full name when the first name points to exactly one known person */

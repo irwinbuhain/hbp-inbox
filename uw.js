@@ -708,7 +708,7 @@ async function open(key){
   catch(e){if(!c){api.toast("Couldn't load the underwriting");close();}}
 }
 let pf=false;
-async function prefetch(keys){if(pf)return;pf=true;try{loadLeaflet().catch(()=>{});for(const k of (keys||[]).slice(0,8)){if(MEM[k])continue;try{const rec=await window.__uwApi.run("getUnderwriting",k);if(rec)cput(rec,k);}catch(e){}}}finally{pf=false;}}
+async function prefetch(keys){if(pf)return;pf=true;try{loadLeaflet().catch(()=>{});const q=(keys||[]).slice(0,16).filter(k=>!MEM[k]&&!cget(k));const w=async()=>{while(q.length){const k=q.shift();try{const rec=await window.__uwApi.run("getUnderwriting",k);if(rec)cput(rec,k);}catch(e){}}};await Promise.all([w(),w(),w()]);}finally{pf=false;}}
 function close(){if(lb.classList.contains("on")){lb.classList.remove("on");return;}if(sheet){closeSheet();return;}openKey=null;view.classList.remove("on");view.style.transform="";window.__uwApi.backOff();setTimeout(()=>{if(map){map.remove();map=null;}},450);}
 const TABS=["subject","comps","repairs"];
 function goTab(dir){const i=TABS.indexOf(tab),j=i+dir;if(j<0||j>=TABS.length)return false;tab=TABS[j];const p=$("uwPane");renderPane();
