@@ -110,9 +110,15 @@ function title(r){return r.lead||r.property||r.bot||r.id;}
 function parse(values){const out=[];(values||[]).slice(1).forEach((row,i)=>{const r={};COLS.forEach((c,j)=>r[c]=row[j]==null?"":String(row[j]));r.rowNum=i+2;if(r.id)out.push(r);});return out;}
 async function load(manual){
   if(!S.ready||S.pending>0)return;
-  try{const d=await run("getData",INIT);if(S.pending>0)return;S.me=d.me;S.isOwner=d.isIrwin;S.rows=OV.rows(parse(d.values));S.uw=OV.uw(d.uw||[]);S.reports=OV.rp(d.reports||[]);S.lastLoad=nowT();S.error=null;
-    try{localStorage.setItem("hbp-cache",JSON.stringify({me:S.me,isOwner:S.isOwner,values:d.values,uw:S.uw,reports:S.reports}));}catch(e){}}
+  let same=false;
+  try{const d=await run("getData",INIT,START||"");if(S.pending>0)return;
+    /* Irwin, Nov 17 2026: "make it all load smoothly and quickly" – nothing changed on the server → keep the screen as it is (no re-draw, no re-save) */
+    const sig=JSON.stringify([d.me,d.values,d.uw,d.reports]);same=sig===S.dataSig&&!S.error;S.dataSig=sig;
+    S.lastLoad=nowT();
+    if(!same){S.me=d.me;S.isOwner=d.isIrwin;S.rows=OV.rows(parse(d.values));S.uw=OV.uw(d.uw||[]);S.reports=OV.rp(d.reports||[]);S.error=null;
+      try{localStorage.setItem("hbp-cache",JSON.stringify({me:S.me,isOwner:S.isOwner,values:d.values,uw:S.uw,reports:S.reports}));}catch(e){}}}
   catch(e){S.error=e;}
+  if(same){const sub=$("sub");if(sub&&S.mode!=="deals"&&S.mode!=="reports"&&/updated/.test(sub.textContent||""))sub.textContent=`${S.me} · updated ${longTime(S.lastLoad)}`;return;}
   if(S.view==="thread"&&S.cur&&!S.rows.find(r=>r.id===S.cur)){closeThread();return;}
   renderList();
   prefetchDetails();
@@ -617,7 +623,7 @@ async function decide(r,decision,note){
     refresh:()=>{setTimeout(()=>load(false),300);},
 backOn:()=>{try{TG.BackButton.show();}catch(e){}},backOff:()=>syncBack()};
   window.__uwHaptic=()=>haptic();
-  {const u=document.createElement("script");u.src="uw.js?v="+Date.now();document.body.appendChild(u);const r=document.createElement("script");r.src="rpt.js?v="+Date.now();document.body.appendChild(r);}
+  {const u=document.createElement("script");u.src="uw.js?v="+(window.__appV||Date.now());document.body.appendChild(u);const r=document.createElement("script");r.src="rpt.js?v="+(window.__appV||Date.now());document.body.appendChild(r);}
   S.ready=true;
   if(!INIT){$("sub").textContent="";$("list").replaceChildren(errorBox(new Error("NOT_TELEGRAM")));return;}
   try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c&&c.values){S.me=c.me;S.isOwner=c.isOwner;S.rows=OV.rows(parse(c.values));S.uw=OV.uw(c.uw||[]);S.reports=OV.rp(c.reports||[]);renderList();}}catch(e){}

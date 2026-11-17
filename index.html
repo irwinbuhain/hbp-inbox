@@ -7,7 +7,7 @@
 <script src="https://telegram.org/js/telegram-web-app.js?59"></script>
 </head><body>
 <script>
-/* Always load the newest app code (GitHub Pages caches pages for ~10 minutes). */
-(function(){var s=document.createElement("script");s.src="app.js?v="+Date.now();document.body.appendChild(s);})();
+/* Load the newest app code, re-using the phone's copy for up to 10 minutes (GitHub Pages caches for ~10 minutes anyway) so the app opens fast. */
+(function(){window.__appV=Math.floor(Date.now()/600000);var s=document.createElement("script");s.src="app.js?v="+window.__appV;document.body.appendChild(s);})();
 </script>
 </body></html>
