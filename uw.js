@@ -694,7 +694,7 @@ const MEM={};
 function cget(k){if(MEM[k])return MEM[k];try{const v=JSON.parse(localStorage.getItem("hbp-uw:"+k)||"null");if(v){MEM[k]=v;return v;}}catch(e){}return null;}
 function cput(rec,key){if(!rec||!rec.id)return;const keys=[rec.id].concat((rec.data&&rec.data.inboxIds)||[]);if(key)keys.push(key);keys.forEach(k=>MEM[k]=rec);
   try{localStorage.setItem("hbp-uw:"+rec.id,JSON.stringify(rec));(((rec.data&&rec.data.inboxIds)||[]).concat(key&&key!==rec.id?[key]:[])).forEach(k=>localStorage.setItem("hbp-uw:"+k,JSON.stringify(rec)));
-    const ks=Object.keys(localStorage).filter(k=>k.indexOf("hbp-uw:")===0);if(ks.length>24)ks.slice(0,ks.length-24).forEach(k=>localStorage.removeItem(k));}catch(e){}}
+    const ks=Object.keys(localStorage).filter(k=>k.indexOf("hbp-uw:")===0);if(ks.length>40)ks.slice(0,ks.length-40).forEach(k=>localStorage.removeItem(k));}catch(e){}}
 let openKey=null;
 async function open(key){
   if(opening)return;opening=true;const api=window.__uwApi;openKey=key;const c=cget(key);
@@ -733,5 +733,5 @@ function sheetSwipe(sh){let x0=null,y0=null,dy=0,t0=0,active=false;
     const was=active;active=false;
     if(was==="up"){sh.style.transform="";if(dy<-90||(Date.now()-t0<300&&dy<-45))sh._onUp();return;}
     if(dy>110||(Date.now()-t0<300&&dy>50)){if(sh._onDown)sh._onDown();else{sh.style.transform="";closeSheet();}}else sh.style.transform="";},{passive:true});}
-window.__uw={open,close,prefetch,isOpen:()=>view.classList.contains("on")};
+window.__uw={open,close,prefetch,isOpen:()=>view.classList.contains("on"),peek:k=>cget(k),put:(rec,k)=>cput(rec,k)};
 })();

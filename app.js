@@ -127,12 +127,23 @@ async function load(manual){
 }
 
 /* warm the underwriting + report screens in the background so they open instantly */
+let bBusy=false;async function bundle(uwIds,rpIds){if(bBusy)return;bBusy=true;
+  try{const idx={};(S.uw||[]).forEach(u=>idx[u.id]=u);
+    const needU=uwIds.filter(id=>{const c=window.__uw.peek(id),u=idx[id]||{};return !c||String(c.status||"")!==String(u.status||"Draft")||String(c.decidedAt||"")!==String(u.decidedAt||"");}).slice(0,30);
+    const needR=rpIds.filter(id=>!window.__rp.peek(id)).slice(0,30);
+    if(!needU.length&&!needR.length)return;
+    const b=await run("getBundle",INIT,needU,needR);
+    Object.keys((b&&b.uw)||{}).forEach(k=>{const rec=b.uw[k];try{window.__ov&&window.__ov.one("uw",rec);}catch(_){}window.__uw.put(rec,k);});
+    Object.keys((b&&b.rp)||{}).forEach(k=>{const f=b.rp[k];try{window.__ov&&window.__ov.mergeActs(f);}catch(_){}window.__rp.put(f);});}
+  catch(e){try{window.__rp.prefetch(rpIds);window.__uw.prefetch(uwIds);}catch(_){}}
+  finally{bBusy=false;}}
 let pfT=0;function prefetchDetails(){clearTimeout(pfT);pfT=setTimeout(()=>{
   const uw=(S.uw||[]).slice().sort((a,b)=>(uwPost(a.status)-uwPost(b.status))||String(b.created||"").localeCompare(String(a.created||""))).map(u=>u.id);
   const rp=(S.reports||[]).map(r=>r.id);
-  /* Irwin, Nov 17 2026: reports and underwritings load side by side (reports used to wait for every underwriting first) */
-  if(window.__rp&&window.__rp.prefetch)window.__rp.prefetch(rp);
-  if(window.__uw&&window.__uw.prefetch)window.__uw.prefetch(uw);
+  /* Irwin, Nov 17 2026 7:45 PM: "Loading in boxes reports and underwriting is taking too long. Can we make that instant and smooth?"
+     One server call brings every underwriting and report that is new or changed, so they're on the phone before they're tapped and open instantly. */
+  if(window.__uw&&window.__rp&&window.__uw.peek&&window.__rp.peek){bundle(uw,rp);}
+  else{if(window.__rp&&window.__rp.prefetch)window.__rp.prefetch(rp);if(window.__uw&&window.__uw.prefetch)window.__uw.prefetch(uw);}
   if(!window.__uw||!window.__rp)prefetchDetails();},window.__uw&&window.__rp?400:800);}
 function scope(){const w=S.isOwner?"all":(S.who||"dandy");return S.rows.filter(r=>forMatch(r,w));}
 function openQueue(){return scope().filter(r=>r.status==="Open").sort((a,b)=>(isOffer(b)-isOffer(a))||sortKey(a.created).localeCompare(sortKey(b.created)));}

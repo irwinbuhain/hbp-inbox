@@ -115,5 +115,5 @@ function nav(step){const ord=(window.__rpOrder&&window.__rpOrder())||[];const i=
     if(dx<0){if(!nav(1))api().toast&&api().toast("That's the last report");}
     else if(!nav(-1)){api().haptic&&api().haptic();close();}},{passive:true});
 })();
-window.__rp={open,close,prefetch,isOpen:()=>view.classList.contains("on")};
+window.__rp={open,close,prefetch,isOpen:()=>view.classList.contains("on"),peek:id=>cget(id),put:f=>cput(f)};
 })();
