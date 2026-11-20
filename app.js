@@ -16,10 +16,14 @@ try { const s = JSON.parse(localStorage.getItem("hbp-inbox2") || "{}"); if (s.wh
 /* Irwin, Nov 12: whatever he decides shows at once and STAYS decided – a refresh that brings back older server data
    (the server can lag a minute behind) never puts a task, underwriting or report suggestion back in front of him.
    Local decisions are kept for 30 min (on this phone) and laid over every load until the server shows them too. */
+/* Irwin, Nov 19 2026 10:07 PM: "My actions sometimes don't clear the item on the inbox." A tap is kept on this phone until the server
+   confirms it; if the answer never comes (app closed, weak signal) it is sent again on the next open – the server accepts a repeat. */
+const DQ={get(){try{return JSON.parse(localStorage.getItem("hbp-dq")||"{}")||{};}catch(e){return {};}},put(m){try{localStorage.setItem("hbp-dq",JSON.stringify(m));}catch(e){}},
+  add(id,o){const m=this.get();m[id]=o;this.put(m);},del(id){const m=this.get();if(m[id]){delete m[id];this.put(m);}},has(id){return !!this.get()[id];}};
 const OV=(()=>{let m={};try{m=JSON.parse(localStorage.getItem("hbp-ov")||"{}");}catch(e){}
   const TTL=30*60e3,save=()=>{try{localStorage.setItem("hbp-ov",JSON.stringify(m));}catch(e){}};
   const now=()=>Date.now();
-  const gc=()=>{let ch=0;for(const k in m)if(now()-m[k].t>TTL){delete m[k];ch=1;}if(ch)save();};
+  const gc=()=>{let ch=0;for(const k in m)if(now()-m[k].t>TTL&&!(k.indexOf("t:")===0&&DQ.has(k.slice(2)))){delete m[k];ch=1;}if(ch)save();};
   const fix=(k,obj)=>{const o=m[k];if(!o||!obj)return obj;
     if(obj.status!=null&&o.f.status!=null&&String(obj.status)===String(o.f.status))return obj;   /* already shows our decision (e.g. from this phone's cache) – keep watching */
     const B=(o.b!=null&&typeof o.b==="object")?o.b:{status:o.b};if(o.b!=null&&Object.keys(B).some(f=>obj[f]!=null&&String(obj[f])!==String(B[f]))){delete m[k];save();return obj;}   /* server moved on (caught up or someone else acted) */
@@ -111,7 +115,7 @@ function parse(values){const out=[];(values||[]).slice(1).forEach((row,i)=>{cons
 async function load(manual){
   if(!S.ready||S.pending>0)return;
   let same=false;
-  try{const d=await run("getData",INIT,START||"");if(S.pending>0)return;
+  try{const d=await run("getData",INIT,START||"",!!manual);if(S.pending>0)return;
     /* Irwin, Nov 17 2026: "make it all load smoothly and quickly" – nothing changed on the server → keep the screen as it is (no re-draw, no re-save) */
     const sig=JSON.stringify([d.me,d.values,d.uw,d.reports]);same=sig===S.dataSig&&!S.error;S.dataSig=sig;
     S.lastLoad=nowT();
@@ -265,6 +269,9 @@ function renderReports(){
   $("whoSeg").hidden=true;$("botChips").hidden=true;
   const list=$("list");list.replaceChildren();
   const R=S.reports||[];
+  /* Irwin, Nov 19 2026: "Reports viewing in the inbox don't clear them in the chat" – looking at the Reports list clears their Telegram pings */
+  if(S.isOwner&&INIT){let sent={};try{sent=JSON.parse(localStorage.getItem("hbp-rs")||"{}")||{};}catch(e){}const nw=R.map(r=>r.id).filter(id=>!sent[id]);
+    if(nw.length){run("reportsSeen",INIT,nw).then(x=>{if(x&&x.ok){nw.forEach(id=>sent[id]=1);const ks=Object.keys(sent);if(ks.length>200)ks.slice(0,ks.length-200).forEach(k=>delete sent[k]);try{localStorage.setItem("hbp-rs",JSON.stringify(sent));}catch(e){}}}).catch(()=>{});}}
   if(!R.length){list.append(el("div",{class:"empty"},el("strong",{text:"No reports yet"}),"End-of-day and morning reports from each bot will show up here."));return;}
   const today=nowT().slice(0,10);const groups={};R.forEach(r=>{const d=(r.date||r.created||"").slice(0,10);(groups[d]=groups[d]||[]).push(r);});
   const ord=Object.keys(groups).sort().reverse().flatMap(d=>groups[d].map(r=>r.id));window.__rpOrder=()=>ord;
@@ -566,13 +573,23 @@ async function decide(r,decision,note){
   const next=openQueue().find(x=>x.id!==r.id);
   if(S.view==="thread"&&S.cur===r.id){if(next)openThread(next.id,1);else{renderThread();setTimeout(closeThread,350);}}else render();
   S.pending=(S.pending||0)+1;
+  DQ.add(r.id,{decision,note:note||"",expect,t:Date.now()});
   try{
     const res=await run("decide",INIT,r.id,decision,note||"",expect);
-    S.pending--;
+    S.pending--;DQ.del(r.id);
     if(!res.ok){OV.del("t:"+r.id);haptic("err");S.rows=OV.rows(parse(res.values));toast(res.reason==="GONE"?"That task is gone":res.reason==="IRWIN_ONLY"?"Only Irwin can approve offers":"Not saved – that task changed, check it again");render();return;}
     if(S.pending===0){S.rows=OV.rows(parse(res.values));renderList();try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c){c.values=res.values;localStorage.setItem("hbp-cache",JSON.stringify(c));}}catch(e){}}
-  }catch(e){S.pending--;OV.del("t:"+r.id);Object.assign(r,before);haptic("err");toast("Couldn't save – try again");render();}
+  }catch(e){S.pending--;/* no answer from the server: keep it done here and send it again shortly */setTimeout(flushDQ,15000);}
 }
+let dqBusy=false;
+async function flushDQ(){if(dqBusy||!INIT)return;const m=DQ.get(),ids=Object.keys(m);if(!ids.length)return;dqBusy=true;let ch=false;
+  try{for(const id of ids){const q=m[id];if(Date.now()-q.t>12*36e5){DQ.del(id);OV.del("t:"+id);ch=true;continue;}
+      try{const res=await run("decide",INIT,id,q.decision,q.note||"",q.expect);DQ.del(id);
+        if(!res.ok&&res.reason!=="GONE"){OV.del("t:"+id);toast("A tap didn't go through – that task changed, check it again");}
+        if(res.values&&S.pending===0){S.rows=OV.rows(parse(res.values));ch=true;}}
+      catch(e){/* still no connection – try again later */}}}
+  finally{dqBusy=false;}
+  if(ch)render();}
 
 /* pull down to refresh the list – iOS-style spinner */
 (function(){
@@ -651,9 +668,10 @@ backOn:()=>{try{TG.BackButton.show();}catch(e){}},backOff:()=>syncBack()};
   if(/^RPT-/.test(START)){S.mode="reports";const t=setInterval(()=>{if(window.__rp){clearInterval(t);window.__rp.open(START);}},100);}
   if(/^UW-/.test(START)){const t=setInterval(()=>{if(window.__uw){clearInterval(t);window.__uw.open(START);}},100);}
   if(START&&S.rows.find(r=>r.id===START))openThread(START);
+  flushDQ();
   await load(false);
   if(START&&S.view!=="thread"&&S.rows.find(r=>r.id===START))openThread(START);
   setInterval(()=>{if(document.visibilityState==="visible"&&!S.busy&&!(document.activeElement&&document.activeElement.tagName==="TEXTAREA"))load(false);},60000);
-  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")load(false);});
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){flushDQ();load(false);}});
 })();
 

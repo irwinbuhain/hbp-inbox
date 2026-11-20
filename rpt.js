@@ -91,6 +91,7 @@ async function open(id){
   view.classList.add("on");A.backOn();view.style.transform="";
   if(c){try{window.__ov&&window.__ov.mergeActs(c);}catch(_){}R=c;render();}
   else view.replaceChildren(E("div",{class:"rh"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:"Loading report…"})),E("span")));
+  try{A.isOwner&&A.isOwner()&&A.run("reportsSeen",[id]).catch(()=>{});}catch(_){} /* Irwin, Nov 19 2026: opening a report clears its Telegram ping right away */
   try{const f=await A.run("getReport",id);if(!f)throw new Error("GONE");try{window.__ov&&window.__ov.mergeActs(f);}catch(_){}cput(f);
     if(openId===id&&view.classList.contains("on")&&(!c||JSON.stringify(f)!==JSON.stringify(c))&&!(document.activeElement&&document.activeElement.tagName==="TEXTAREA"&&view.contains(document.activeElement))){R=f;render();}}
   catch(e){if(!c){A.toast("Couldn't load the report");close();}}
