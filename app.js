@@ -114,8 +114,10 @@ function title(r){return r.lead||r.property||r.bot||r.id;}
 function parse(values){const out=[];(values||[]).slice(1).forEach((row,i)=>{const r={};COLS.forEach((c,j)=>r[c]=row[j]==null?"":String(row[j]));r.rowNum=i+2;if(r.id)out.push(r);});return out;}
 async function load(manual){
   if(!S.ready||S.pending>0)return;
-  let same=false;
-  try{const d=await run("getData",INIT,START||"",!!manual);if(S.pending>0)return;
+  let same=false;const t0=Date.now();
+  /* Irwin, Nov 20 2026 7:07 PM: "it doesnt clear right away from my inbox when I hit done or skip" – a load that was already on its way when he tapped
+     carries the server's older copy (from before the tap) and put the task back. Anything that left before his last tap is thrown away and re-asked. */
+  try{const d=await run("getData",INIT,START||"",!!manual);if(S.pending>0)return;if((S.lastAct||0)>=t0){setTimeout(()=>load(false),1500);return;}
     /* Irwin, Nov 17 2026: "make it all load smoothly and quickly" – nothing changed on the server → keep the screen as it is (no re-draw, no re-save) */
     const sig=JSON.stringify([d.me,d.values,d.uw,d.reports]);same=sig===S.dataSig&&!S.error;S.dataSig=sig;
     S.lastLoad=nowT();
@@ -565,7 +567,7 @@ function renderDock(r){
 
 async function decide(r,decision,note){
   if(isOffer(r)&&decision==="Approve"&&!S.isOwner){haptic("err");toast("Only Irwin can approve offers");return;}
-  const before={...r},expect={status:r.status,draft:r.draft,amount:r.amount};
+  const before={...r},expect={status:r.status,draft:r.draft,amount:r.amount};S.lastAct=Date.now();
   Object.assign(r,{status:(r.status==="FYI"&&decision==="Done")?"Resolved":"Decided",decision,note:note||"",decidedBy:S.me,decidedAt:nowT()});
   OV.set("t:"+r.id,{status:r.status,decision,note:note||"",decidedBy:S.me,decidedAt:r.decidedAt},{status:before.status,draft:before.draft||"",amount:before.amount||"",created:before.created||""});
   try{sessionStorage.removeItem("c-"+r.id);}catch(e){}
@@ -654,7 +656,7 @@ async function flushDQ(){if(dqBusy||!INIT)return;const m=DQ.get(),ids=Object.key
   if(!START){try{START=new URLSearchParams(location.search).get("task")||"";}catch(e){}}
   window.__uwApi={run:(fn,...x)=>run(fn,INIT,...x),isOwner:()=>S.isOwner,me:()=>S.me,toast,haptic,person:(id,data)=>uwPerson((S.uw||[]).find(x=>x.id===id)||{bot:(data||{}).bot,inboxIds:(data||{}).inboxIds},data),copy:t=>copyName(t),
     /* instant list updates after acting in the underwriting / report screens */
-    patch:(kind,id,fields)=>{const L=kind==="uw"?S.uw:S.reports;const it=(L||[]).find(x=>x.id===id||(x.inboxIds||[]).indexOf(id)>=0);
+    patch:(kind,id,fields)=>{S.lastAct=Date.now();const L=kind==="uw"?S.uw:S.reports;const it=(L||[]).find(x=>x.id===id||(x.inboxIds||[]).indexOf(id)>=0);
       if(it){const key=(kind==="uw"?"u:":"r:")+it.id;if(kind==="uw")OV.set(key,fields,it.status);else OV.set(key,fields,null);Object.assign(it,fields);}
       renderList();
       try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c){c.uw=S.uw;c.reports=S.reports;localStorage.setItem("hbp-cache",JSON.stringify(c));}}catch(e){}},
@@ -667,6 +669,11 @@ backOn:()=>{try{TG.BackButton.show();}catch(e){}},backOff:()=>syncBack()};
   try{const c=JSON.parse(localStorage.getItem("hbp-cache")||"null");if(c&&c.values){S.me=c.me;S.isOwner=c.isOwner;S.rows=OV.rows(parse(c.values));S.uw=OV.uw(c.uw||[]);S.reports=OV.rp(c.reports||[]);renderList();}}catch(e){}
   if(/^RPT-/.test(START)){S.mode="reports";const t=setInterval(()=>{if(window.__rp){clearInterval(t);window.__rp.open(START);}},100);}
   if(/^UW-/.test(START)){const t=setInterval(()=>{if(window.__uw){clearInterval(t);window.__uw.open(START);}},100);}
+  /* Irwin, Nov 20 2026 7:07 PM: "It still takes a little long when I open a message notification in my inbox to load" – a brand-new task isn't on the
+     phone yet, so the app used to wait for the server. The Telegram ping's Open button now carries the task itself (?d=…), so it opens at once and the
+     server's copy replaces it a moment later. */
+  if(START&&!S.rows.find(r=>r.id===START)){try{const q=new URLSearchParams(location.search).get("d");if(q){const a=JSON.parse(decodeURIComponent(escape(atob(q.replace(/-/g,"+").replace(/_/g,"/")))));
+    if(Array.isArray(a)&&a[0]===START){const r={};COLS.forEach((c,j)=>r[c]=a[j]==null?"":String(a[j]));r.rowNum=0;r._lite=true;if(!S.me)S.me="Irwin";S.rows=OV.rows([r].concat(S.rows||[]).filter((x,i,L)=>L.findIndex(y=>y.id===x.id)===i));renderList();}}}catch(e){}}
   if(START&&S.rows.find(r=>r.id===START))openThread(START);
   flushDQ();
   await load(false);
