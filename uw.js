@@ -597,7 +597,7 @@ function dock(rec){
   const reset=E("button",{type:"button",class:"oreset",hidden:"",onclick:()=>{openEdited=false;syncOpen();oi.focus();}},"Use MIN");
   oi.addEventListener("input",()=>{const n=oi.value.replace(/[^0-9]/g,"");oi.value=n?Number(n).toLocaleString("en-US"):"";openEdited=true;reset.hidden=false;window.__uwOpenHint&&window.__uwOpenHint();});
   const hint=E("div",{class:"ohint",id:"uwOpenHint"});
-  window.__uwOpenHint=()=>{const v=openVal(),mn=(U.offer||{}).min,mx=(U.offer||{}).max;hint.className="ohint";if(hasHold()&&!U._pick){hint.textContent="Pick Fix & Flip or Buy & Hold above to set the offer";hint.classList.add("warn");return;}const pvx=window.__uwPv;if(pvx&&U.offerTemplate)pvx.textContent=v?String(U.offerTemplate).split("{AMOUNT}").join($$(v)):"No offer will be sent";
+  window.__uwOpenHint=()=>{const v=openVal(),mn=(U.offer||{}).min,mx=(U.offer||{}).max;hint.className="ohint";if(hasHold()&&!U._pick){hint.textContent="Pick Fix & Flip or Buy & Hold above to set the offer";hint.classList.add("warn");return;}const pvx=window.__uwPv;if(pvx&&U.offerTemplate)pvx.textContent=v?String(U.offerTemplate).replace(/\b3% commission/gi,"4% commission").split("{AMOUNT}").join($$(v)):"No offer will be sent";
     if(!v){hint.textContent=(typeof mn==="number"&&mn<=0)?"MIN is below zero – type an offer, or approve with no offer":"No offer will be drafted";hint.classList.add("warn");}
     else if(typeof mx==="number"&&v>mx){hint.textContent=`Above MAX (${$$(mx)})`;hint.classList.add("warn");}
     else if(typeof mn==="number"&&v===mn&&!openEdited){hint.textContent=(U.offerTemplate&&U.contact)?"MIN · texts "+(U.contact&&(U.contact.firstName||U.contact.name)||"the realtor")+" when you approve":"MIN offer – the bot drafts the text, you approve it before it sends";}
@@ -650,7 +650,7 @@ function dock(rec){
 function offerText(info,money,street){
   const first=(info&&info.firstName)||"there";
   if(info&&info.direct)return `Hi ${first}, thanks for taking the time to share the details on ${street}. We can offer ${money} cash for the property. We can close in 3 weeks with a 7-day inspection period. Let me know if that works for you!`;
-  if(U.offerTemplate)return String(U.offerTemplate).split("{AMOUNT}").join(money);
+  if(U.offerTemplate)return String(U.offerTemplate).replace(/\b3% commission/gi,"4% commission").split("{AMOUNT}").join(money);
   return `Hi ${first}, my partners and I can offer ${money} cash for ${street}. We pay 3% commission, close in 3 weeks, and need a 7-day inspection period. Could you submit it to the seller?`;
 }
 async function textOfferSheet(rec,amount,approveToo){
