@@ -20,7 +20,7 @@ const css=`
 .dlwait.ok{background:#0f2416;border-color:#1d4a2b}.dlwait.ok .it+.it{border-color:#1d4a2b}.dlwait.ok .it small{color:#8fc9a0}
 .dlacts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .dlacts a,.dlacts button{display:flex;align-items:center;justify-content:center;gap:6px;border-radius:12px;padding:12px 8px;font:600 15px system-ui;border:1px solid #3a3a3c;background:#1c1c1e;color:#fff;text-decoration:none}
-.dlacts .pri{background:#0a84ff;border-color:#0a84ff}.dlacts .dead{color:#ff453a;grid-column:1/-1}.dlacts .dead.arm{background:#ff453a;color:#fff;border-color:#ff453a}
+.dlacts .pri{background:#0a84ff;border-color:#0a84ff}.dlacts .dead{color:#ff453a;grid-column:1/-1}.dlacts .half{grid-column:auto}.dlacts .dead.arm.nur{background:#ff9f0a;border-color:#ff9f0a}.dlhero .cp{font-size:13px;opacity:.6}.dlacts .dead.arm{background:#ff453a;color:#fff;border-color:#ff453a}
 .dlnote{background:#1c1c1e;border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.45;white-space:pre-wrap;color:#e5e5ea}
 .dlnote .d{font-size:12px;color:#8e8e93;margin-bottom:4px;white-space:normal}.dlnote+.dlnote{margin-top:8px}
 .dlnote.cut{max-height:150px;overflow:hidden;position:relative}.dlnote.cut:after{content:"";position:absolute;left:0;right:0;bottom:0;height:40px;background:linear-gradient(transparent,#1c1c1e)}
@@ -38,7 +38,6 @@ const api=()=>window.__uwApi;const W=()=>window.__dlHelp||{};
 const MEM={};let openId=null,D=null,full=null,showAll=false,showTx=false,armed=false;
 function cget(id){if(MEM[id])return MEM[id];try{const c=JSON.parse(localStorage.getItem("hbp-dl-"+id)||"null");if(c)MEM[id]=c;return c;}catch(e){return null;}}
 function cput(id,f){MEM[id]=f;try{localStorage.setItem("hbp-dl-"+id,JSON.stringify(f));}catch(e){}}
-const LOC="jUXoUgmaQ8JWrlfCiATk";
 function age(t){if(!t)return "";const h=(Date.now()-t)/36e5;if(h<1)return "just now";if(h<24)return Math.round(h)+"h ago";const d=Math.round(h/24);return d+(d===1?" day ago":" days ago");}
 function when(t){if(!t)return "";const d=new Date(t);return d.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" · "+d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});}
 function tParse(s){if(typeof s==="number")return s;const t=Date.parse(String(s||"").replace(" ","T"));return isNaN(t)?0:t;}
@@ -71,13 +70,13 @@ function events(x,f){const ev=[];if(!f)return ev;
 
 function render(){if(!D)return;const x=D,f=full,A=api();const u=latestUw(f,x);
   const keep=view.querySelector(".dlb");const top=keep?keep.scrollTop:0;
-  const title=titleOf(x,u);
+  const title=titleOf(x,u);const nm=x.who||x.name||"";
   const head=E("div",{class:"rh"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:title}),E("span",{text:`${x.stage} · ${x.pipe}`})),E("span"));
   const b=E("div",{class:"dlb"});
   const live=u&&!/^(Stopped|Passed)/i.test(u.status||"")?u:null;const ov=live?(Number(String(live.open||"").replace(/[^0-9]/g,""))||0):0;
   const ct=(()=>{const k=(f&&f.tasks||[]).map(k=>/\$([\d,]{5,})\s+contract/i.exec(k.title||"")).find(Boolean);return k?k[1]:"";})();
   const ph=String(x.phone||"").replace(/\D/g,"").slice(-10);const phone=ph.length===10?`(${ph.slice(0,3)}) ${ph.slice(3,6)}-${ph.slice(6)}`:x.phone;
-  b.append(E("div",{class:"dlhero"},E("div",{class:"w",text:[x.who,x.company].filter(Boolean).join(" · ")||x.name}),
+  b.append(E("div",{class:"dlhero"},E("div",{class:"w",onclick:()=>nm&&copyName(nm)},[x.who,x.company].filter(Boolean).join(" · ")||x.name,nm?E("span",{class:"cp",text:" 📋"}):null),
     phone?E("div",{class:"c",text:phone}):null,
     E("div",{class:"dlchips"},ct?E("span",{class:"dlchip gold",text:"Contract "+money(ct)}):ov?E("span",{class:"dlchip gold",text:"Offer "+money(ov)}):(live&&live.max?E("span",{class:"dlchip gold",text:"MAX "+money(live.max)}):(x.value>1000?E("span",{class:"dlchip gold",text:money(x.value)}):null)),
       E("span",{class:"dlchip blue",text:x.stage}),x.since?E("span",{class:"dlchip",text:"in stage "+age(x.since).replace(" ago","")}):null,
@@ -86,13 +85,14 @@ function render(){if(!D)return;const x=D,f=full,A=api();const u=latestUw(f,x);
   const wt=waiting(x,f);const urgent=wt.some(w=>w.i==="💬"||w.i==="📥"||w.i==="🧮");
   b.append(E("div",{class:"dlsec",text:"Waiting on"}),E("div",{class:"dlwait"+(urgent?"":" ok")},...wt.map(w=>E("div",{class:"it"},E("i",{text:w.i}),E("div",{},w.t,w.s?E("small",{text:w.s}):null)))));
   /* actions */
-  const tel=String(x.phone||"").replace(/[^0-9+]/g,"");
+  /* Irwin, Nov 23 3:15 PM: "Remove call and open in GHL. Just allow me to copy the name so I can open it in my app." */
+  const owner=A&&A.isOwner&&A.isOwner();
+  const END={"Realtor":[["lost","↩ Back to Warm Partner Drip"]],"Listing":[["lost","Move to Lost"],["nurture","Move to 30 Day Cycle"]],"Deal Desk":[["lost","Move to Lost"],["nurture","Move to Send to Nurture"]],"Seller":[["lost","Move to Lost"],["nurture","Move to Nurture"]]}[x.pipe]||[["lost","Remove from Watch"]];
   const acts=E("div",{class:"dlacts"},
-    tel?E("a",{class:"pri",href:"tel:"+tel},"📞 Call"):null,
-    tel?E("a",{href:"sms:"+tel},"💬 Text"):null,
+    nm?E("button",{type:"button",class:"pri",onclick:()=>copyName(nm)},"📋 Copy name"):null,
     u?E("button",{type:"button",onclick:()=>{window.__uw&&window.__uw.open(u.id);}},"🧮 Underwriting"):null,
-    x.cid?E("a",{href:`https://app.gohighlevel.com/v2/location/${LOC}/contacts/detail/${x.cid}`,target:"_blank",rel:"noopener"},"↗ Open in GHL"):null,
-    A&&A.isOwner&&A.isOwner()?E("button",{type:"button",class:"dead"+(armed?" arm":""),onclick:kill},armed?"Tap again – mark lost in GHL & remove":"✖ Cancelled / dead"):null);
+    owner&&!armed?E("button",{type:"button",class:"dead",onclick:()=>{armed=true;A.haptic&&A.haptic();render();}},"✖ Cancelled / dead"):null,
+    ...(owner&&armed?END.map(([k,l])=>E("button",{type:"button",class:"dead arm"+(END.length>1?" half":"")+(k==="nurture"?" nur":""),onclick:()=>kill(k)},l)).concat([E("button",{type:"button",class:"dead",onclick:()=>{armed=false;render();}},"Keep it")]):[]));
   b.append(E("div",{class:"dlsec",text:"Actions"}),acts);
   /* recent texts – chat bubbles, oldest at the top */
   const tx=(f&&f.msgs||[]).filter(m=>!/^Opportunity updated$/i.test(m.body)).slice(0,showTx?12:5).reverse();
@@ -109,9 +109,9 @@ function render(){if(!D)return;const x=D,f=full,A=api();const u=latestUw(f,x);
       if(!showAll&&ev.length>12)b.append(E("button",{class:"dlmore",type:"button",onclick:()=>{showAll=true;render();}},`Show all ${ev.length}`));}}
   view.replaceChildren(head,b);b.scrollTop=top;}
 
-async function kill(){const A=api();if(!armed){armed=true;A.haptic&&A.haptic();render();setTimeout(()=>{if(armed){armed=false;render();}},4000);return;}
-  armed=false;const id=D.id;
-  try{const r=await A.run("watchHide",id,"cancelled",true);A.haptic&&A.haptic("ok");A.toast(r&&r.lost?"Marked lost in GHL and removed from Watch":"Removed from Watch");
+function copyName(n){const A=api();if(A.copy)A.copy(n);else{try{navigator.clipboard.writeText(n);}catch(e){}A.toast&&A.toast("Copied “"+n+"”");}}
+async function kill(mode){const A=api();armed=false;const id=D.id;render();
+  try{const r=await A.run("watchHide",id,"cancelled",mode);A.haptic&&A.haptic("ok");A.toast(r&&r.moved?"Moved to "+r.moved+" – off Watch":"Removed from Watch");
     window.__dlRemoved&&window.__dlRemoved(id);close();}
   catch(e){A.toast("Couldn't update – try again");render();}}
 
