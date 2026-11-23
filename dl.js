@@ -44,7 +44,7 @@ function tParse(s){if(typeof s==="number")return s;const t=Date.parse(String(s||
 function money(n){n=Number(String(n==null?"":n).replace(/[^0-9.]/g,""))||0;return n?"$"+Math.round(n).toLocaleString("en-US"):"";}
 const DONE=/^(resolved|done|fyi|approved|sent|closed|skipped|dismissed)/i;
 function first(x){return String(x.who||"").split(/\s+/)[0]||"they";}
-function titleOf(x,u){const s=u?String(u.address||"").split(",")[0]:"";const n=String(x.name||"");const m=/[–-]\s*(\d.+)$/.exec(n);return s||(m?m[1].split(",")[0]:"")||(/^\d/.test(n)?n.split(",")[0]:"")||x.who||n||"Deal";}
+function titleOf(x,u){const s=u?String(u.address||"").split(",")[0]:"";const n=String(x.name||"");const m=/[–-]\s*(\d.+)$/.exec(n);return s||(m?m[1].split(",")[0]:"")||(/^\d/.test(n)?n.split(",")[0]:"")||x.addr||x.who||n||"Deal";}
 function latestUw(f,x){const L=(f&&f.uw&&f.uw.length)?f.uw:((W().uw&&W().uw(x))?[W().uw(x)]:[]);return L.find(u=>!/^(Stopped|Passed)/i.test(u.status||""))||L[0]||null;}
 
 /* what we are waiting for – the answer at the top of the page */
@@ -90,7 +90,7 @@ function render(){if(!D)return;const x=D,f=full,A=api();const u=latestUw(f,x);
   /* actions */
   /* Irwin, Nov 23 3:15 PM: "Remove call and open in GHL. Just allow me to copy the name so I can open it in my app." */
   const owner=A&&A.isOwner&&A.isOwner();
-  const END={"Realtor":[["lost","↩ Back to Warm Partner Drip"]],"Listing":[["lost","Move to Lost"],["nurture","Move to 30 Day Cycle"]],"Deal Desk":[["lost","Move to Lost"],["nurture","Move to Send to Nurture"]],"Seller":[["lost","Move to Lost"],["nurture","Move to Nurture"]]}[x.pipe]||[["lost","Remove from Watch"]];
+  const END={"Realtor":[["lost","Move to Lost"],["nurture","Move to Warm Partner Drip"]],"Listing":[["lost","Move to Lost"],["nurture","Move to 30 Day Cycle"]],"Deal Desk":[["lost","Move to Lost"],["nurture","Move to Send to Nurture"]],"Seller":[["lost","Move to Lost"],["nurture","Move to Nurture"]]}[x.pipe]||[["lost","Remove from Watch"]];
   const acts=E("div",{class:"dlacts"},
     nm?E("button",{type:"button",class:"pri",onclick:()=>copyName(nm)},"📋 Copy name"):null,
     u?E("button",{type:"button",onclick:()=>{window.__uw&&window.__uw.open(u.id);}},"🧮 Underwriting"):null,

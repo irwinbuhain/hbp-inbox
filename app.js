@@ -210,7 +210,7 @@ function renderWatch(){
   const card=x=>{const u=wUw(x),q=wQuiet(x);
     /* Irwin, Nov 23 3:35 PM: name on top, address below, name copyable */
     const street=u?String(u.address||"").split(",")[0]:"";const nm=String(x.who||"").trim();
-    const m=/[–-]\s*(\d.+)$/.exec(String(x.name||""));const addr=street||(m?m[1].split(",")[0]:"")||(/^\d/.test(String(x.name||""))?String(x.name).split(",")[0]:"");
+    const m=/[–-]\s*(\d.+)$/.exec(String(x.name||""));const addr=street||(m?m[1].split(",")[0]:"")||(/^\d/.test(String(x.name||""))?String(x.name).split(",")[0]:"")||x.addr||"";
     const title=nm||addr||x.name||"Deal";
     const who=[addr&&addr!==title?addr:"",x.pipe,x.company].filter(Boolean).join(" · ");
     const ov=u?(Number(String(u.open||"").replace(/[^0-9]/g,""))||Number(u.current)||0):0;const offer=ov?"offer "+wMoney(ov):(u&&u.max?"MAX "+wMoney(u.max):(x.value>1000?wMoney(x.value):""));
@@ -218,7 +218,7 @@ function renderWatch(){
     const lc=x.dir==="inbound"&&x._lv===2?"red":(q>=3&&x._lv?"red":(x._lv?"amb":""));
     /* Irwin, Nov 23 3:02 PM: tap a deal → its summary page (what's been done, what we're waiting for, all the deal actions) */
     return el("div",{class:"wcard lv"+x._lv,role:"button",onclick:()=>{haptic();window.__dl&&window.__dl.open(x);}},
-      el("div",{class:"wtop"},el("b",{class:"wname",text:title}),nm?el("button",{type:"button",class:"wcopy",onclick:e=>{e.stopPropagation();copyName(nm);}},"📋"):null,el("span",{class:"wstage",text:x.stage}),el("span",{class:"wchev",text:"›"})),
+      el("div",{class:"wtop"},el("b",{class:"wname",text:title,onclick:nm?(e=>{e.stopPropagation();copyName(nm);}):null}),nm?el("button",{type:"button",class:"wcopy",onclick:e=>{e.stopPropagation();copyName(nm);}},"📋"):null,el("span",{class:"wstage",text:x.stage}),el("span",{class:"wchev",text:"›"})),
       who?el("div",{class:"wsub",text:who}):null,
       el("div",{class:"wrow"},offer?el("span",{class:"wchip gold",text:offer}):null,
         el("span",{class:"wchip "+lc,text:"💬 "+lastTxt}),
