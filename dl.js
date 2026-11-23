@@ -9,7 +9,7 @@ const css=`
 #dlView .rh .t{text-align:center;min-width:0}#dlView .rh b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#dlView .rh span{font-size:12px;color:#8e8e93}
 #dlView .dlb{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px calc(24px + env(safe-area-inset-bottom,0px))}
 .dlhero{background:#1c1c1e;border-radius:14px;padding:12px 14px}
-.dlhero .w{font-size:15px;font-weight:600}.dlhero .c{font-size:13px;color:#8e8e93;margin-top:2px}
+.dlhero .w{font-size:19px;font-weight:700}.dlhero .a{font-size:15px;color:#e5e5ea;margin-top:2px}.dlhero .c{font-size:13px;color:#8e8e93;margin-top:2px}
 .dlchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .dlchip{font-size:12px;border-radius:999px;padding:3px 9px;background:#2c2c2e;color:#e5e5ea}
 .dlchip.gold{background:#3a2e0b;color:#e3b341}.dlchip.blue{background:#0a1f3d;color:#7fb2ff}
@@ -20,7 +20,7 @@ const css=`
 .dlwait.ok{background:#0f2416;border-color:#1d4a2b}.dlwait.ok .it+.it{border-color:#1d4a2b}.dlwait.ok .it small{color:#8fc9a0}
 .dlacts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .dlacts a,.dlacts button{display:flex;align-items:center;justify-content:center;gap:6px;border-radius:12px;padding:12px 8px;font:600 15px system-ui;border:1px solid #3a3a3c;background:#1c1c1e;color:#fff;text-decoration:none}
-.dlacts .pri{background:#0a84ff;border-color:#0a84ff}.dlacts .dead{color:#ff453a;grid-column:1/-1}.dlacts .half{grid-column:auto}.dlacts .dead.arm.nur{background:#ff9f0a;border-color:#ff9f0a}.dlhero .cp{font-size:13px;opacity:.6}.dlacts .dead.arm{background:#ff453a;color:#fff;border-color:#ff453a}
+.dlacts .pri{background:#0a84ff;border-color:#0a84ff}.dlacts .dead{color:#ff453a;grid-column:1/-1}.dlacts .half{grid-column:auto}.dlacts .dead.arm.nur{background:#ff9f0a;border-color:#ff9f0a}.dlhero .cp,#dlView .rh .cp{font-size:13px;opacity:.6;display:inline}.dlacts .dead.arm{background:#ff453a;color:#fff;border-color:#ff453a}
 .dlnote{background:#1c1c1e;border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.45;white-space:pre-wrap;color:#e5e5ea}
 .dlnote .d{font-size:12px;color:#8e8e93;margin-bottom:4px;white-space:normal}.dlnote+.dlnote{margin-top:8px}
 .dlnote.cut{max-height:150px;overflow:hidden;position:relative}.dlnote.cut:after{content:"";position:absolute;left:0;right:0;bottom:0;height:40px;background:linear-gradient(transparent,#1c1c1e)}
@@ -71,12 +71,15 @@ function events(x,f){const ev=[];if(!f)return ev;
 function render(){if(!D)return;const x=D,f=full,A=api();const u=latestUw(f,x);
   const keep=view.querySelector(".dlb");const top=keep?keep.scrollTop:0;
   const title=titleOf(x,u);const nm=x.who||x.name||"";
-  const head=E("div",{class:"rh"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t"},E("b",{text:title}),E("span",{text:`${x.stage} · ${x.pipe}`})),E("span"));
+  /* Irwin, Nov 23 3:35 PM: "Have the title show the name and then below the address. have the name be able to be copied" */
+  const addr=/^\d/.test(title)?title:"";
+  const head=E("div",{class:"rh"},E("button",{class:"uwback",type:"button",onclick:close},"‹ Back"),E("div",{class:"t",onclick:()=>nm&&copyName(nm)},E("b",{},nm||title,nm?E("span",{class:"cp",text:" 📋"}):null),E("span",{text:addr||`${x.stage} · ${x.pipe}`})),E("span"));
   const b=E("div",{class:"dlb"});
   const live=u&&!/^(Stopped|Passed)/i.test(u.status||"")?u:null;const ov=live?(Number(String(live.open||"").replace(/[^0-9]/g,""))||0):0;
   const ct=(()=>{const k=(f&&f.tasks||[]).map(k=>/\$([\d,]{5,})\s+contract/i.exec(k.title||"")).find(Boolean);return k?k[1]:"";})();
   const ph=String(x.phone||"").replace(/\D/g,"").slice(-10);const phone=ph.length===10?`(${ph.slice(0,3)}) ${ph.slice(3,6)}-${ph.slice(6)}`:x.phone;
-  b.append(E("div",{class:"dlhero"},E("div",{class:"w",onclick:()=>nm&&copyName(nm)},[x.who,x.company].filter(Boolean).join(" · ")||x.name,nm?E("span",{class:"cp",text:" 📋"}):null),
+  b.append(E("div",{class:"dlhero"},E("div",{class:"w",onclick:()=>nm&&copyName(nm)},nm||title,nm?E("span",{class:"cp",text:" 📋"}):null),
+    E("div",{class:"a",text:[addr,x.company].filter(Boolean).join(" · ")||x.pipe}),
     phone?E("div",{class:"c",text:phone}):null,
     E("div",{class:"dlchips"},ct?E("span",{class:"dlchip gold",text:"Contract "+money(ct)}):ov?E("span",{class:"dlchip gold",text:"Offer "+money(ov)}):(live&&live.max?E("span",{class:"dlchip gold",text:"MAX "+money(live.max)}):(x.value>1000?E("span",{class:"dlchip gold",text:money(x.value)}):null)),
       E("span",{class:"dlchip blue",text:x.stage}),x.since?E("span",{class:"dlchip",text:"in stage "+age(x.since).replace(" ago","")}):null,
