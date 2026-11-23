@@ -603,7 +603,11 @@ function dock(rec){
     else if(typeof mn==="number"&&v===mn&&!openEdited){hint.textContent=(U.offerTemplate&&U.contact)?"MIN · texts "+(U.contact&&(U.contact.firstName||U.contact.name)||"the realtor")+" when you approve":"MIN offer – the bot drafts the text, you approve it before it sends";}
     else{hint.textContent=(U.offerTemplate&&U.contact)?"Your number · texts "+(U.contact&&(U.contact.firstName||U.contact.name)||"the realtor")+" when you approve":"Your number – the bot drafts the text, you approve it before it sends";}};
   window.__uwSyncOpen=syncOpen;
-  function syncOpen(){if(openEdited)return;const mn=(U.offer||{}).min,wait=hasHold()&&!U._pick;oi.disabled=wait||!window.__uwApi.isOwner();oi.placeholder=wait?"pick a strategy":"";oi.value=(!wait&&typeof mn==="number"&&mn>0)?Math.round(mn).toLocaleString("en-US"):"";reset.hidden=true;window.__uwOpenHint();}
+  function syncOpen(){if(openEdited)return;
+    /* Irwin, Nov 23 5:54 PM: "trying to approve it with a custom offer but it's not letting me type in offers" – when Fix & Flip has no numbers
+       (ARV blank), Buy & Hold is the only strategy, so it is picked for him; and the box is never locked for Irwin – he can always type an offer. */
+    {const fl=(U.offer||{}).flip;if(hasHold()&&!U._pick&&!(fl&&Number(fl.min)>0)){U._pick="hold";U.offer.use="hold";uwNums(U,Number((U.rehab||{}).total)||0);}}
+    const mn=(U.offer||{}).min,wait=hasHold()&&!U._pick;oi.disabled=!window.__uwApi.isOwner();oi.placeholder=wait?"type or pick a strategy":"";oi.value=(!wait&&typeof mn==="number"&&mn>0)?Math.round(mn).toLocaleString("en-US"):"";reset.hidden=true;window.__uwOpenHint();}
   openEdited=false;
   const canText=!!(U.offerTemplate&&U.contact&&U.contact.contactId);
   /* compact dock (Irwin, Nov 6): the text preview is collapsed so the dock never covers the underwriting */
