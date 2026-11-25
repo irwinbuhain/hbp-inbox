@@ -228,7 +228,7 @@ function renderWatch(){
     const lc=x.dir==="inbound"&&x._lv===2?"red":(q>=3&&x._lv?"red":(x._lv?"amb":""));
     /* Irwin, Nov 23 3:02 PM: tap a deal → its summary page (what's been done, what we're waiting for, all the deal actions) */
     return el("div",{class:"wcard lv"+x._lv,role:"button",onclick:()=>{haptic();window.__dl&&window.__dl.open(x);}},
-      el("div",{class:"wtop"},el("b",{class:"wname",text:title,onclick:nm?(e=>{e.stopPropagation();copyName(nm);}):null}),nm?el("button",{type:"button",class:"wcopy",onclick:e=>{e.stopPropagation();copyName(nm);}},"📋"):null,el("span",{class:"wstage",text:x.stage}),el("span",{class:"wchev",text:"›"})),
+      el("div",{class:"wtop"},el("b",{class:"wname"+(nm?" cpy":""),text:title,onclick:nm?(e=>{e.stopPropagation();copyName(nm);}):null}),el("span",{class:"wstage",text:x.stage}),el("span",{class:"wchev",text:"›"})),
       who?el("div",{class:"wsub",text:who}):null,
       el("div",{class:"wrow"},offer?el("span",{class:"wchip gold",text:offer}):null,
         el("span",{class:"wchip "+lc,text:"💬 "+lastTxt}),
